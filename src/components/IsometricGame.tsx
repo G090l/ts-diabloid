@@ -4,6 +4,7 @@ interface Tile {
   x: number;
   y: number;
   type: 'grass' | 'stone' | 'water';
+  occupied: boolean;
 }
 
 interface Enemy {
@@ -21,7 +22,6 @@ interface Character {
   path: {x: number, y: number}[];
 }
 
-// Константы вынесены в отдельный объект для удобства
 const CONSTANTS = {
   TILE_WIDTH: 64,
   TILE_HEIGHT: 32,
@@ -55,7 +55,6 @@ const IsometricGame: React.FC = () => {
   });
   const [cameraOffset, setCameraOffset] = useState({ x: 0, y: 0 });
 
-  // Мемоизированные функции для преобразования координат
   const tileToScreen = useCallback((x: number, y: number) => ({
     x: (x - y) * CONSTANTS.TILE_WIDTH / 2,
     y: (x + y) * CONSTANTS.TILE_HEIGHT / 2
@@ -66,18 +65,30 @@ const IsometricGame: React.FC = () => {
     y: Math.floor((screenY / (CONSTANTS.TILE_HEIGHT / 2) - screenX / (CONSTANTS.TILE_WIDTH / 2)) / 2)
   }), []);
 
+  // Обновление занятости тайлов
+  const updateTilesOccupancy = useCallback((tiles: Tile[], character: Character, enemies: Enemy[]) => {
+    return tiles.map(tile => {
+      const isOccupiedByCharacter = tile.x === character.x && tile.y === character.y;
+      const isOccupiedByEnemy = enemies.some(enemy => enemy.x === tile.x && enemy.y === tile.y);
+      const isWater = tile.type === 'water';
+      
+      return {
+        ...tile,
+        occupied: isOccupiedByCharacter || isOccupiedByEnemy || isWater
+      };
+    });
+  }, []);
+
   // Инициализация карты и врагов
   useEffect(() => {
-    // Генерация тайлов
     const newTiles: Tile[] = [];
     for (let y = 0; y < CONSTANTS.MAP_HEIGHT; y++) {
       for (let x = 0; x < CONSTANTS.MAP_WIDTH; x++) {
         const type = Math.random() > 0.95 ? 'water' : 'grass';
-        newTiles.push({ x, y, type });
+        newTiles.push({ x, y, type, occupied: type === 'water' });
       }
     }
     
-    // Генерация врагов
     const newEnemies: Enemy[] = [];
     for (let i = 0; i < CONSTANTS.ENEMY_COUNT; i++) {
       newEnemies.push({
@@ -87,9 +98,11 @@ const IsometricGame: React.FC = () => {
       });
     }
     
-    setTiles(newTiles);
+    // Обновляем занятость тайлов после создания врагов
+    const updatedTiles = updateTilesOccupancy(newTiles, character, newEnemies);
+    setTiles(updatedTiles);
     setEnemies(newEnemies);
-  }, []);
+  }, [updateTilesOccupancy]);
 
   // Обновление позиции камеры
   useEffect(() => {
@@ -105,13 +118,16 @@ const IsometricGame: React.FC = () => {
     });
   }, [character.x, character.y, tileToScreen]);
 
-  // Проверка соседства с врагом
+  // Обновление занятости тайлов при изменении позиции персонажа или врагов
+  useEffect(() => {
+    setTiles(prevTiles => updateTilesOccupancy(prevTiles, character, enemies));
+  }, [character.x, character.y, enemies, updateTilesOccupancy]);
+
   const isAdjacentToEnemy = useCallback((charX: number, charY: number, enemyX: number, enemyY: number) => {
     return (Math.abs(charX - enemyX) === 1 && charY === enemyY) || 
            (Math.abs(charY - enemyY) === 1 && charX === enemyX);
   }, []);
 
-  // Атака врага
   const attackEnemy = useCallback((enemyX: number, enemyY: number) => {
     setEnemies(prevEnemies => prevEnemies.map(enemy => {
       if (enemy.x === enemyX && enemy.y === enemyY) {
@@ -122,7 +138,6 @@ const IsometricGame: React.FC = () => {
     }).filter(Boolean) as Enemy[]);
   }, []);
 
-  // Поиск пути с мемоизацией
   const findPath = useCallback((startX: number, startY: number, targetX: number, targetY: number) => {
     const path: {x: number, y: number}[] = [];
     let currentX = startX;
@@ -135,9 +150,8 @@ const IsometricGame: React.FC = () => {
       if (currentX !== targetX) {
         const nextX = currentX + (targetX > currentX ? 1 : -1);
         const tile = tiles.find(t => t.x === nextX && t.y === currentY);
-        const enemyOnTile = enemies.some(e => e.x === nextX && e.y === currentY);
         
-        if (tile?.type !== 'water' && !enemyOnTile) {
+        if (tile && !tile.occupied) {
           currentX = nextX;
           path.push({x: currentX, y: currentY});
           if (stopBeforeTarget && nextX === targetX && currentY === targetY) break;
@@ -147,9 +161,8 @@ const IsometricGame: React.FC = () => {
       if (currentY !== targetY) {
         const nextY = currentY + (targetY > currentY ? 1 : -1);
         const tile = tiles.find(t => t.x === currentX && t.y === nextY);
-        const enemyOnTile = enemies.some(e => e.x === currentX && e.y === nextY);
         
-        if (tile?.type !== 'water' && !enemyOnTile) {
+        if (tile && !tile.occupied) {
           currentY = nextY;
           path.push({x: currentX, y: currentY});
           if (stopBeforeTarget && currentX === targetX && nextY === targetY) break;
@@ -160,7 +173,6 @@ const IsometricGame: React.FC = () => {
     return path;
   }, [tiles, enemies]);
 
-  // Обработка движения
   useEffect(() => {
     if (!character.moving || character.path.length === 0) return;
 
@@ -172,9 +184,8 @@ const IsometricGame: React.FC = () => {
 
         const [nextStep, ...remainingPath] = prev.path;
         const tile = tiles.find(t => t.x === nextStep.x && t.y === nextStep.y);
-        const enemyOnTile = enemies.some(e => e.x === nextStep.x && e.y === nextStep.y);
         
-        if (!tile || tile.type === 'water' || enemyOnTile) {
+        if (!tile || tile.occupied) {
           return { ...prev, moving: false, targetX: null, targetY: null, path: [] };
         }
 
@@ -188,9 +199,8 @@ const IsometricGame: React.FC = () => {
     }, CONSTANTS.MOVE_INTERVAL);
 
     return () => clearInterval(moveInterval);
-  }, [character.moving, character.path, tiles, enemies]);
+  }, [character.moving, character.path, tiles]);
 
-  // Обработчики событий
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -217,7 +227,10 @@ const IsometricGame: React.FC = () => {
     if (tileX < 0 || tileX >= CONSTANTS.MAP_WIDTH || tileY < 0 || tileY >= CONSTANTS.MAP_HEIGHT) return;
 
     const clickedEnemy = enemies.find(e => e.x === tileX && e.y === tileY);
+    const clickedTile = tiles.find(t => t.x === tileX && t.y === tileY);
     
+    if (!clickedTile) return;
+
     if (clickedEnemy) {
       if (isAdjacentToEnemy(character.x, character.y, tileX, tileY)) {
         attackEnemy(tileX, tileY);
@@ -233,24 +246,20 @@ const IsometricGame: React.FC = () => {
           }));
         }
       }
-    } else {
-      const clickedTile = tiles.find(t => t.x === tileX && t.y === tileY);
-      if (clickedTile?.type !== 'water') {
-        const path = findPath(character.x, character.y, tileX, tileY);
-        if (path.length > 0) {
-          setCharacter(prev => ({
-            ...prev,
-            moving: true,
-            targetX: tileX,
-            targetY: tileY,
-            path
-          }));
-        }
+    } else if (!clickedTile.occupied) {
+      const path = findPath(character.x, character.y, tileX, tileY);
+      if (path.length > 0) {
+        setCharacter(prev => ({
+          ...prev,
+          moving: true,
+          targetX: tileX,
+          targetY: tileY,
+          path
+        }));
       }
     }
   }, [cameraOffset, character.x, character.y, enemies, isAdjacentToEnemy, attackEnemy, findPath, screenToTile, tiles]);
 
-  // Рендеринг
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -258,12 +267,10 @@ const IsometricGame: React.FC = () => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Очистка холста
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.save();
     ctx.translate(cameraOffset.x, cameraOffset.y);
 
-    // Рендеринг тайлов
     tiles.forEach(tile => {
       const { x: screenX, y: screenY } = tileToScreen(tile.x, tile.y);
       
@@ -285,12 +292,10 @@ const IsometricGame: React.FC = () => {
       ctx.stroke();
     });
 
-    // Рендеринг врагов
     enemies.forEach(enemy => {
       const { x: screenX, y: screenY } = tileToScreen(enemy.x, enemy.y);
       const adjustedScreenY = screenY - CONSTANTS.ENEMY_HEIGHT / 2;
 
-      // Обводка при наведении
       if (hoveredEnemy?.x === enemy.x && hoveredEnemy?.y === enemy.y) {
         ctx.strokeStyle = '#ff0000';
         ctx.lineWidth = 3;
@@ -303,7 +308,6 @@ const IsometricGame: React.FC = () => {
         ctx.stroke();
       }
 
-      // Тело врага
       ctx.fillStyle = '#8a2be2';
       ctx.beginPath();
       ctx.moveTo(screenX, adjustedScreenY + CONSTANTS.ENEMY_HEIGHT);
@@ -313,7 +317,6 @@ const IsometricGame: React.FC = () => {
       ctx.closePath();
       ctx.fill();
 
-      // Полоска здоровья
       const healthBarWidth = CONSTANTS.ENEMY_WIDTH;
       const healthBarX = screenX - CONSTANTS.ENEMY_WIDTH / 2;
       const healthBarY = adjustedScreenY - 8;
@@ -324,7 +327,6 @@ const IsometricGame: React.FC = () => {
       ctx.fillRect(healthBarX, healthBarY, healthBarWidth * (enemy.health / 100), 5);
     });
 
-    // Выделение целевого тайла
     if (character.targetX !== null && character.targetY !== null) {
       const targetTile = tiles.find(t => t.x === character.targetX && t.y === character.targetY);
       if (targetTile) {
@@ -342,7 +344,6 @@ const IsometricGame: React.FC = () => {
       }
     }
 
-    // Точки пути
     if (character.path.length > 0) {
       ctx.fillStyle = '#fff';
       character.path.forEach(step => {
@@ -355,7 +356,6 @@ const IsometricGame: React.FC = () => {
       });
     }
 
-    // Персонаж
     const { x: charScreenX, y: charScreenY } = tileToScreen(character.x, character.y);
     const adjustedCharScreenY = charScreenY - CONSTANTS.CHARACTER_HEIGHT / 2;
 
