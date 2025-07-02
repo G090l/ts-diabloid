@@ -11,6 +11,7 @@ interface Enemy {
   x: number;
   y: number;
   health: number;
+  chasing: boolean;
 }
 
 interface Character {
@@ -37,7 +38,10 @@ const CONSTANTS = {
   MAP_WIDTH: 50,
   MAP_HEIGHT: 50,
   ENEMY_COUNT: 70,
-  MOVE_INTERVAL: 200
+  MOVE_INTERVAL: 200,
+  ENEMY_CHASE_RADIUS: 4,
+  ENEMY_MOVE_INTERVAL: 500,
+  RENDER_RADIUS: 17
 };
 
 const IsometricGame: React.FC = () => {
@@ -65,18 +69,48 @@ const IsometricGame: React.FC = () => {
     y: Math.floor((screenY / (CONSTANTS.TILE_HEIGHT / 2) - screenX / (CONSTANTS.TILE_WIDTH / 2)) / 2)
   }), []);
 
-  // Обновление занятости тайлов
-  const updateTilesOccupancy = useCallback((tiles: Tile[], character: Character, enemies: Enemy[]) => {
-    return tiles.map(tile => {
-      const isOccupiedByCharacter = tile.x === character.x && tile.y === character.y;
-      const isOccupiedByEnemy = enemies.some(enemy => enemy.x === tile.x && enemy.y === tile.y);
-      const isWater = tile.type === 'water';
-      
-      return {
-        ...tile,
-        occupied: isOccupiedByCharacter || isOccupiedByEnemy || isWater
-      };
+  const calculateDistance = (x1: number, y1: number, x2: number, y2: number) => {
+    return Math.max(Math.abs(x1 - x2), Math.abs(y1 - y2));
+  };
+
+  const isTileFreeForEnemy = useCallback((x: number, y: number, enemiesList: Enemy[], currentEnemy?: Enemy) => {
+    if (x < 0 || x >= CONSTANTS.MAP_WIDTH || y < 0 || y >= CONSTANTS.MAP_HEIGHT) {
+      return false;
+    }
+    
+    const isOccupiedByOtherEnemy = enemiesList.some(enemy => 
+      enemy.x === x && enemy.y === y && (!currentEnemy || (enemy.x !== currentEnemy.x || enemy.y !== currentEnemy.y))
+    );
+    
+    const tile = tiles.find(t => t.x === x && t.y === y);
+    const isOccupiedByPlayer = character.x === x && character.y === y;
+    
+    return !isOccupiedByOtherEnemy && tile && !tile.occupied && !isOccupiedByPlayer;
+  }, [tiles, character.x, character.y]);
+
+  const updateTilesOccupancy = useCallback((tilesList: Tile[], char: Character, enemiesList: Enemy[]) => {
+    const updatedTiles = tilesList.map(tile => ({
+      ...tile,
+      occupied: tile.type === 'water'
+    }));
+    
+    const playerTileIndex = updatedTiles.findIndex(t => 
+      t.x === char.x && t.y === char.y
+    );
+    if (playerTileIndex !== -1) {
+      updatedTiles[playerTileIndex].occupied = true;
+    }
+    
+    enemiesList.forEach(enemy => {
+      const enemyTileIndex = updatedTiles.findIndex(t => 
+        t.x === enemy.x && t.y === enemy.y
+      );
+      if (enemyTileIndex !== -1) {
+        updatedTiles[enemyTileIndex].occupied = true;
+      }
     });
+    
+    return updatedTiles;
   }, []);
 
   // Инициализация карты и врагов
@@ -91,18 +125,26 @@ const IsometricGame: React.FC = () => {
     
     const newEnemies: Enemy[] = [];
     for (let i = 0; i < CONSTANTS.ENEMY_COUNT; i++) {
+      let x: number, y: number;
+      do {
+        x = Math.floor(Math.random() * CONSTANTS.MAP_WIDTH);
+        y = Math.floor(Math.random() * CONSTANTS.MAP_HEIGHT);
+      } while (
+        newTiles.some(t => t.x === x && t.y === y && t.occupied) ||
+        calculateDistance(x, y, 5, 5) < 3 // Не спавнить слишком близко к игроку
+      );
+      
       newEnemies.push({
-        x: Math.floor(Math.random() * CONSTANTS.MAP_WIDTH),
-        y: Math.floor(Math.random() * CONSTANTS.MAP_HEIGHT),
-        health: 100
+        x,
+        y,
+        health: 100,
+        chasing: false
       });
     }
     
-    // Обновляем занятость тайлов после создания врагов
-    const updatedTiles = updateTilesOccupancy(newTiles, character, newEnemies);
-    setTiles(updatedTiles);
+    setTiles(newTiles);
     setEnemies(newEnemies);
-  }, [updateTilesOccupancy]);
+  }, []);
 
   // Обновление позиции камеры
   useEffect(() => {
@@ -118,7 +160,7 @@ const IsometricGame: React.FC = () => {
     });
   }, [character.x, character.y, tileToScreen]);
 
-  // Обновление занятости тайлов при изменении позиции персонажа или врагов
+  // Обновление занятости тайлов
   useEffect(() => {
     setTiles(prevTiles => updateTilesOccupancy(prevTiles, character, enemies));
   }, [character.x, character.y, enemies, updateTilesOccupancy]);
@@ -150,8 +192,9 @@ const IsometricGame: React.FC = () => {
       if (currentX !== targetX) {
         const nextX = currentX + (targetX > currentX ? 1 : -1);
         const tile = tiles.find(t => t.x === nextX && t.y === currentY);
+        const isEnemyHere = enemies.some(e => e.x === nextX && e.y === currentY);
         
-        if (tile && !tile.occupied) {
+        if (tile && !tile.occupied && !isEnemyHere) {
           currentX = nextX;
           path.push({x: currentX, y: currentY});
           if (stopBeforeTarget && nextX === targetX && currentY === targetY) break;
@@ -161,8 +204,9 @@ const IsometricGame: React.FC = () => {
       if (currentY !== targetY) {
         const nextY = currentY + (targetY > currentY ? 1 : -1);
         const tile = tiles.find(t => t.x === currentX && t.y === nextY);
+        const isEnemyHere = enemies.some(e => e.x === currentX && e.y === nextY);
         
-        if (tile && !tile.occupied) {
+        if (tile && !tile.occupied && !isEnemyHere) {
           currentY = nextY;
           path.push({x: currentX, y: currentY});
           if (stopBeforeTarget && currentX === targetX && nextY === targetY) break;
@@ -173,6 +217,7 @@ const IsometricGame: React.FC = () => {
     return path;
   }, [tiles, enemies]);
 
+  // Движение персонажа
   useEffect(() => {
     if (!character.moving || character.path.length === 0) return;
 
@@ -184,8 +229,9 @@ const IsometricGame: React.FC = () => {
 
         const [nextStep, ...remainingPath] = prev.path;
         const tile = tiles.find(t => t.x === nextStep.x && t.y === nextStep.y);
+        const isEnemyHere = enemies.some(e => e.x === nextStep.x && e.y === nextStep.y);
         
-        if (!tile || tile.occupied) {
+        if (!tile || tile.occupied || isEnemyHere) {
           return { ...prev, moving: false, targetX: null, targetY: null, path: [] };
         }
 
@@ -199,7 +245,54 @@ const IsometricGame: React.FC = () => {
     }, CONSTANTS.MOVE_INTERVAL);
 
     return () => clearInterval(moveInterval);
-  }, [character.moving, character.path, tiles]);
+  }, [character.moving, character.path, tiles, enemies]);
+
+  // Движение врагов
+  useEffect(() => {
+    const moveEnemies = () => {
+      setEnemies(prevEnemies => {
+        const newEnemies = [...prevEnemies];
+        const movedEnemies = new Set<number>();
+
+        return newEnemies.map((enemy, index) => {
+          const distance = calculateDistance(enemy.x, enemy.y, character.x, character.y);
+          const shouldChase = distance <= CONSTANTS.ENEMY_CHASE_RADIUS;
+          
+          if (!shouldChase) {
+            return { ...enemy, chasing: false };
+          }
+          
+          const directions = [
+            { dx: Math.sign(character.x - enemy.x), dy: 0 },
+            { dx: 0, dy: Math.sign(character.y - enemy.y) }
+          ];
+          
+          if (Math.random() > 0.5) directions.reverse();
+          
+          for (const dir of directions) {
+            const newX = enemy.x + dir.dx;
+            const newY = enemy.y + dir.dy;
+            
+            if (isTileFreeForEnemy(newX, newY, newEnemies, enemy) && !movedEnemies.has(index)) {
+              movedEnemies.add(index);
+              enemy.x = newX;
+              enemy.y = newY;
+              
+              return { 
+                ...enemy, 
+                chasing: true 
+              };
+            }
+          }
+          
+          return { ...enemy, chasing: false };
+        });
+      });
+    };
+    
+    const enemyMoveInterval = setInterval(moveEnemies, CONSTANTS.ENEMY_MOVE_INTERVAL);
+    return () => clearInterval(enemyMoveInterval);
+  }, [character.x, character.y, isTileFreeForEnemy]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
@@ -260,6 +353,7 @@ const IsometricGame: React.FC = () => {
     }
   }, [cameraOffset, character.x, character.y, enemies, isAdjacentToEnemy, attackEnemy, findPath, screenToTile, tiles]);
 
+  // Отрисовка игры с учетом радиуса видимости
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -271,7 +365,12 @@ const IsometricGame: React.FC = () => {
     ctx.save();
     ctx.translate(cameraOffset.x, cameraOffset.y);
 
-    tiles.forEach(tile => {
+    // Отрисовка только тайлов в радиусе видимости
+    const visibleTiles = tiles.filter(tile => 
+      calculateDistance(tile.x, tile.y, character.x, character.y) <= CONSTANTS.RENDER_RADIUS
+    );
+
+    visibleTiles.forEach(tile => {
       const { x: screenX, y: screenY } = tileToScreen(tile.x, tile.y);
       
       let color;
@@ -292,7 +391,12 @@ const IsometricGame: React.FC = () => {
       ctx.stroke();
     });
 
-    enemies.forEach(enemy => {
+    // Отрисовка врагов в радиусе видимости
+    const visibleEnemies = enemies.filter(enemy => 
+      calculateDistance(enemy.x, enemy.y, character.x, character.y) <= CONSTANTS.RENDER_RADIUS
+    );
+
+    visibleEnemies.forEach(enemy => {
       const { x: screenX, y: screenY } = tileToScreen(enemy.x, enemy.y);
       const adjustedScreenY = screenY - CONSTANTS.ENEMY_HEIGHT / 2;
 
@@ -308,7 +412,7 @@ const IsometricGame: React.FC = () => {
         ctx.stroke();
       }
 
-      ctx.fillStyle = '#8a2be2';
+      ctx.fillStyle = enemy.chasing ? '#ff0000' : '#8a2be2';
       ctx.beginPath();
       ctx.moveTo(screenX, adjustedScreenY + CONSTANTS.ENEMY_HEIGHT);
       ctx.lineTo(screenX - CONSTANTS.ENEMY_WIDTH / 2, adjustedScreenY + CONSTANTS.ENEMY_HEIGHT);
@@ -329,7 +433,7 @@ const IsometricGame: React.FC = () => {
 
     if (character.targetX !== null && character.targetY !== null) {
       const targetTile = tiles.find(t => t.x === character.targetX && t.y === character.targetY);
-      if (targetTile) {
+      if (targetTile && calculateDistance(targetTile.x, targetTile.y, character.x, character.y) <= CONSTANTS.RENDER_RADIUS) {
         const { x: screenX, y: screenY } = tileToScreen(targetTile.x, targetTile.y);
         
         ctx.strokeStyle = CONSTANTS.TARGET_HIGHLIGHT_COLOR;
@@ -347,15 +451,18 @@ const IsometricGame: React.FC = () => {
     if (character.path.length > 0) {
       ctx.fillStyle = '#fff';
       character.path.forEach(step => {
-        const { x: tileScreenX, y: tileScreenY } = tileToScreen(step.x, step.y);
-        const centerY = tileScreenY + CONSTANTS.TILE_HEIGHT / 2;
-        
-        ctx.beginPath();
-        ctx.arc(tileScreenX, centerY, CONSTANTS.PATH_DOT_RADIUS, 0, Math.PI * 2);
-        ctx.fill();
+        if (calculateDistance(step.x, step.y, character.x, character.y) <= CONSTANTS.RENDER_RADIUS) {
+          const { x: tileScreenX, y: tileScreenY } = tileToScreen(step.x, step.y);
+          const centerY = tileScreenY + CONSTANTS.TILE_HEIGHT / 2;
+          
+          ctx.beginPath();
+          ctx.arc(tileScreenX, centerY, CONSTANTS.PATH_DOT_RADIUS, 0, Math.PI * 2);
+          ctx.fill();
+        }
       });
     }
 
+    // Отрисовка персонажа
     const { x: charScreenX, y: charScreenY } = tileToScreen(character.x, character.y);
     const adjustedCharScreenY = charScreenY - CONSTANTS.CHARACTER_HEIGHT / 2;
 
