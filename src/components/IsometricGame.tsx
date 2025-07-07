@@ -21,7 +21,7 @@ interface Item {
   id: string;
   name: string;
   icon: string;
-  type: 'weapon' | 'armor' | 'helmet' | 'boots';
+  type: 'weapon' | 'armor' | 'helmet' | 'boots' | 'potion';
   effect: ItemEffect;
 }
 
@@ -50,7 +50,8 @@ const ITEMS: Item[] = [
   { id: 'helmet1', name: 'Кожаный шлем', icon: '⛑️', type: 'helmet', effect: { defenseBonus: 3 } },
   { id: 'helmet2', name: 'Рогатый шлем', icon: '🤠', type: 'helmet', effect: { defenseBonus: 5 } },
   { id: 'boots1', name: 'Кожаные ботинки', icon: '👞', type: 'boots', effect: { defenseBonus: 2 } },
-  { id: 'boots2', name: 'Сапоги', icon: '👢', type: 'boots', effect: { defenseBonus: 4 } }
+  { id: 'boots2', name: 'Сапоги', icon: '👢', type: 'boots', effect: { defenseBonus: 4 } },
+  { id: 'healthpotion1', name: 'Зелье здоровья', icon: '🧪', type: 'potion', effect: { healthBonus: 50 } }
 ];
 
 // =============================================
@@ -74,13 +75,15 @@ const IsometricGame: React.FC = () => {
   const [inventoryOpen, setInventoryOpen] = useState(false);
   const [itemsOnMap, setItemsOnMap] = useState<{item: Item, x: number, y: number}[]>([]);
   const [draggedItem, setDraggedItem] = useState<{item: Item, index: number, fromEquipped: boolean} | null>(null);
+  const [usePotionArea, setUsePotionArea] = useState(false);
   
   // Экипированные предметы
   const [equippedItems, setEquippedItems] = useState({
     helmet: null as Item | null,
     armor: null as Item | null,
     weapon: null as Item | null,
-    boots: null as Item | null
+    boots: null as Item | null,
+    potion: null as Item | null
   });
   
   // Инвентарь (20 пустых слотов)
@@ -139,6 +142,15 @@ const IsometricGame: React.FC = () => {
     
     return total;
   }, [equippedItems]);
+
+  // Функция применения эффекта зелья
+  const applyPotionEffect = useCallback((potion: Item) => {
+    setCharacter(prev => {
+      const healthBonus = potion.effect.healthBonus || 0;
+      const newHealth = Math.min(prev.maxHealth, prev.health + healthBonus);
+      return { ...prev, health: newHealth };
+    });
+  }, []);
 
   // =============================================
   // ИНИЦИАЛИЗАЦИЯ ИГРЫ
@@ -489,63 +501,132 @@ const IsometricGame: React.FC = () => {
   const handleDrop = (targetIndex: number, isEquipmentSlot: boolean = false) => {
     if (!draggedItem) return;
 
+    // Если это зелье и его кладут в область использования
+    if (draggedItem.item.type === 'potion' && usePotionArea) {
+        applyPotionEffect(draggedItem.item);
+        // Удаляем зелье из инвентаря
+        const newInventory = [...inventoryItems];
+        newInventory[draggedItem.index] = null;
+        setInventoryItems(newInventory);
+        setUsePotionArea(false);
+        setDraggedItem(null);
+        return;
+    }
+
     // Если перетаскиваем из экипировки в инвентарь
     if (draggedItem.fromEquipped && !isEquipmentSlot) {
-      const itemType = draggedItem.item.type;
-      const newEquippedItems = { ...equippedItems };
-      const newInventory = [...inventoryItems];
-      
-      // Находим первый пустой слот
-      const emptySlotIndex = newInventory.findIndex(item => item === null);
-      if (emptySlotIndex !== -1) {
-        newInventory[emptySlotIndex] = draggedItem.item;
-        newEquippedItems[itemType] = null;
+        const itemType = draggedItem.item.type;
+        const newEquippedItems = { ...equippedItems };
+        const newInventory = [...inventoryItems];
         
-        setEquippedItems(newEquippedItems);
-        setInventoryItems(newInventory);
-      }
+        // Находим первый пустой слот
+        const emptySlotIndex = newInventory.findIndex(item => item === null);
+        if (emptySlotIndex !== -1) {
+            newInventory[emptySlotIndex] = draggedItem.item;
+            
+            // Определяем, из какого слота экипировки снимаем предмет
+            switch (itemType) {
+                case 'weapon': newEquippedItems.weapon = null; break;
+                case 'helmet': newEquippedItems.helmet = null; break;
+                case 'armor': newEquippedItems.armor = null; break;
+                case 'boots': newEquippedItems.boots = null; break;
+            }
+            
+            setEquippedItems(newEquippedItems);
+            setInventoryItems(newInventory);
+        }
     }
     // Если перетаскиваем из инвентаря в экипировку
     else if (!draggedItem.fromEquipped && isEquipmentSlot) {
-      const itemType = draggedItem.item.type;
-      const newEquippedItems = { ...equippedItems };
-      const oldItem = newEquippedItems[itemType];
-      const newInventory = [...inventoryItems];
-      
-      // Меняем местами предметы
-      newEquippedItems[itemType] = draggedItem.item;
-      newInventory[draggedItem.index] = oldItem;
-      
-      setEquippedItems(newEquippedItems);
-      setInventoryItems(newInventory);
+        // Определяем тип слота экипировки
+        let slotType: keyof typeof equippedItems;
+        switch (targetIndex) {
+            case -1: slotType = 'weapon'; break;
+            case -2: slotType = 'helmet'; break;
+            case -3: slotType = 'armor'; break;
+            case -4: slotType = 'boots'; break;
+            default: slotType = 'potion'; break;
+        }
+
+        // Проверяем, можно ли экипировать этот предмет в данный слот
+        if (draggedItem.item.type !== slotType) {
+            // Неправильный тип предмета для этого слота - отменяем действие
+            setDraggedItem(null);
+            setUsePotionArea(false);
+            return;
+        }
+
+        // Меняем местами предметы
+        const newEquippedItems = { ...equippedItems };
+        const oldItem = newEquippedItems[slotType];
+        const newInventory = [...inventoryItems];
+        
+        newEquippedItems[slotType] = draggedItem.item;
+        newInventory[draggedItem.index] = oldItem;
+        
+        setEquippedItems(newEquippedItems);
+        setInventoryItems(newInventory);
     }
     // Если перетаскиваем внутри инвентаря
     else if (!draggedItem.fromEquipped && !isEquipmentSlot) {
-      const newInventory = [...inventoryItems];
-      if (newInventory[targetIndex] !== null) {
-        // Меняем местами предметы
-        const temp = newInventory[targetIndex];
-        newInventory[targetIndex] = draggedItem.item;
-        newInventory[draggedItem.index] = temp;
-      } else {
-        // Перемещаем предмет в пустой слот
-        newInventory[targetIndex] = draggedItem.item;
-        newInventory[draggedItem.index] = null;
-      }
-      setInventoryItems(newInventory);
+        const newInventory = [...inventoryItems];
+        if (newInventory[targetIndex] !== null) {
+            // Меняем местами предметы
+            const temp = newInventory[targetIndex];
+            newInventory[targetIndex] = draggedItem.item;
+            newInventory[draggedItem.index] = temp;
+        } else {
+            // Перемещаем предмет в пустой слот
+            newInventory[targetIndex] = draggedItem.item;
+            newInventory[draggedItem.index] = null;
+        }
+        setInventoryItems(newInventory);
     }
     
+    setUsePotionArea(false);
     setDraggedItem(null);
-  };
+};
+
+  // Обработчик двойного клика по предмету в инвентаре
+  const handleDoubleClick = (index: number) => {
+  const item = inventoryItems[index];
+  if (!item) return;
+
+  // Если это зелье - используем его
+  if (item.type === 'potion') {
+    applyPotionEffect(item);
+    // Удаляем зелье из инвентаря
+    const newInventory = [...inventoryItems];
+    newInventory[index] = null;
+    setInventoryItems(newInventory);
+    return;
+  }
+
+  // Для других предметов - пытаемся экипировать
+  const slotType = item.type as keyof typeof equippedItems;
+  const newEquippedItems = { ...equippedItems };
+  const newInventory = [...inventoryItems];
+
+  // Если слот уже занят - меняем местами
+  if (newEquippedItems[slotType]) {
+    const oldItem = newEquippedItems[slotType];
+    newInventory[index] = oldItem;
+  } else {
+    newInventory[index] = null;
+  }
+
+  newEquippedItems[slotType] = item;
+  
+  setEquippedItems(newEquippedItems);
+  setInventoryItems(newInventory);
+};
 
   // =============================================
   // СИСТЕМА ОТРИСОВКИ
   // =============================================
   // Отрисовка здоровья
   const drawHealthOrb = useCallback((ctx: CanvasRenderingContext2D) => {
-    const bonuses = calculateBonuses();
-    const maxHealthWithBonus = character.maxHealth + (bonuses.healthBonus || 0);
-    const healthPercentage = Math.min(1, character.health / maxHealthWithBonus);
+    const healthPercentage = Math.min(1, character.health / character.maxHealth);
     
     const orbX = CONSTANTS.HEALTH_ORB_MARGIN + CONSTANTS.HEALTH_ORB_RADIUS;
     const orbY = CONSTANTS.CANVAS_HEIGHT - CONSTANTS.HEALTH_ORB_MARGIN - CONSTANTS.HEALTH_ORB_RADIUS;
@@ -569,8 +650,8 @@ const IsometricGame: React.FC = () => {
     ctx.strokeStyle = '#000000'; ctx.lineWidth = 1; ctx.stroke();
     ctx.fillStyle = '#ffffff'; ctx.font = 'bold 16px Arial';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(`${character.health}/${maxHealthWithBonus}`, orbX, orbY);
-  }, [character.health, character.maxHealth, calculateBonuses]);
+    ctx.fillText(`${character.health}/${character.maxHealth}`, orbX, orbY);
+  }, [character.health, character.maxHealth]);
 
   // Основной цикл отрисовки
   useEffect(() => {
@@ -710,7 +791,7 @@ const IsometricGame: React.FC = () => {
     return (
       <div style={statsStyle}>
         <h3 style={{ marginTop: 0, textAlign: 'center' }}>Характеристики</h3>
-        <p>Здоровье: {character.health + (bonuses.healthBonus || 0)}</p>
+        <p>Здоровье: {character.health}</p>
         <p>Атака: +{bonuses.damageBonus || 0}</p>
         <p>Защита: +{bonuses.defenseBonus || 0}</p>
       </div>
@@ -852,6 +933,59 @@ const IsometricGame: React.FC = () => {
           </div>
         </div>
         
+        {/* Область для использования зелий */}
+        <div 
+          style={{
+            position: 'absolute',
+            right: CONSTANTS.INVENTORY_PADDING,
+            top: `${CONSTANTS.INVENTORY_SLOT_SIZE * 2 + CONSTANTS.INVENTORY_PADDING * 4}px`,
+            width: CONSTANTS.INVENTORY_SLOT_SIZE,
+            height: CONSTANTS.INVENTORY_SLOT_SIZE,
+            border: '1px dashed #8a5a2b',
+            backgroundColor: usePotionArea ? 'rgba(139, 0, 0, 0.5)' : 'rgba(0, 100, 0, 0.3)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            cursor: 'pointer'
+          }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            if (draggedItem?.item.type === 'potion') {
+              setUsePotionArea(true);
+            }
+          }}
+          onDragLeave={() => setUsePotionArea(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            if (draggedItem?.item.type === 'potion') {
+              handleDrop(-1, true); // Используем специальный индекс для области использования
+            }
+          }}
+          onClick={() => {
+            // Поиск первого зелья в инвентаре
+            const potionIndex = inventoryItems.findIndex(
+              item => item?.type === 'potion'
+            );
+            if (potionIndex !== -1) {
+              const potion = inventoryItems[potionIndex]!;
+              applyPotionEffect(potion);
+              const newInventory = [...inventoryItems];
+              newInventory[potionIndex] = null;
+              setInventoryItems(newInventory);
+            }
+          }}
+        >
+          <span style={{ fontSize: '24px' }}>❤️</span>
+          <div style={{
+            position: 'absolute',
+            bottom: '2px',
+            fontSize: '10px',
+            color: '#8a5a2b'
+          }}>
+            Исп. зелье
+          </div>
+        </div>
+        
         {/* Основной инвентарь */}
         <div style={inventorySlotsStyle}>
           {inventoryItems.map((item, index) => (
@@ -862,6 +996,7 @@ const IsometricGame: React.FC = () => {
               onDragStart={() => handleDragStart(index)}
               onDragOver={handleDragOver}
               onDrop={() => handleDrop(index)}
+              onDoubleClick={() => handleDoubleClick(index)} // Добавляем обработчик двойного клика
             >
               {item ? item.icon : ''}
             </div>
