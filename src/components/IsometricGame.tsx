@@ -76,7 +76,9 @@ const IsometricGame: React.FC = () => {
   const [itemsOnMap, setItemsOnMap] = useState<{item: Item, x: number, y: number}[]>([]);
   const [draggedItem, setDraggedItem] = useState<{item: Item, index: number, fromEquipped: boolean} | null>(null);
   const [usePotionArea, setUsePotionArea] = useState(false);
-  
+  const [grassTexture, setGrassTexture] = useState<HTMLImageElement | null>(null);
+  const [waterTexture, setWaterTexture] = useState<HTMLImageElement | null>(null);
+
   // Экипированные предметы
   const [equippedItems, setEquippedItems] = useState({
     helmet: null as Item | null,
@@ -88,6 +90,17 @@ const IsometricGame: React.FC = () => {
   
   // Инвентарь (20 пустых слотов)
   const [inventoryItems, setInventoryItems] = useState<(Item | null)[]>(Array(20).fill(null));
+
+ // Загрузка текстур
+  useEffect(() => {
+    const grassImg = new Image();
+    grassImg.src = '/textures/grass.png';
+    grassImg.onload = () => setGrassTexture(grassImg);
+
+    const waterImg = new Image();
+    waterImg.src = '/textures/water.png';
+    waterImg.onload = () => setWaterTexture(waterImg);
+  }, []);
 
   // =============================================
   // ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
@@ -108,14 +121,7 @@ const IsometricGame: React.FC = () => {
   // =============================================
   // ФУНКЦИИ ПРОВЕРКИ И ОБНОВЛЕНИЯ СОСТОЯНИЯ
   // =============================================
-  const isTileFreeForEnemy = useCallback((x: number, y: number) => {
-    if (x < 0 || x >= CONSTANTS.MAP_WIDTH || y < 0 || y >= CONSTANTS.MAP_HEIGHT) return false;
-    const tile = tiles.find(t => t.x === x && t.y === y);
-    const isOccupiedByPlayer = character.x === x && character.y === y;
-    const isOccupiedByItem = itemsOnMap.some(i => i.x === x && i.y === y);
-    return tile && !tile.occupied && !isOccupiedByPlayer && !isOccupiedByItem;
-  }, [tiles, character.x, character.y, itemsOnMap]);
-
+  
   const updateTilesOccupancy = useCallback((tilesList: Tile[], char: Character, enemiesList: Enemy[]) => {
     return tilesList.map(tile => {
       const occupied = tile.type === 'water' || 
@@ -667,12 +673,77 @@ const IsometricGame: React.FC = () => {
     tiles.filter(t => calculateDistance(t.x, t.y, character.x, character.y) <= CONSTANTS.RENDER_RADIUS)
       .forEach(tile => {
         const { x: screenX, y: screenY } = tileToScreen(tile.x, tile.y);
-        ctx.fillStyle = tile.type === 'grass' ? '#5a8f3d' : tile.type === 'stone' ? '#7a7a7a' : '#3a5a9a';
-        ctx.beginPath(); ctx.moveTo(screenX, screenY);
-        ctx.lineTo(screenX + CONSTANTS.TILE_WIDTH / 2, screenY + CONSTANTS.TILE_HEIGHT / 2);
-        ctx.lineTo(screenX, screenY + CONSTANTS.TILE_HEIGHT); 
-        ctx.lineTo(screenX - CONSTANTS.TILE_WIDTH / 2, screenY + CONSTANTS.TILE_HEIGHT / 2);
-        ctx.closePath(); ctx.fill(); ctx.stroke();
+        
+        if (tile.type === 'grass') {
+          // Рисуем траву с текстурой
+          ctx.beginPath(); 
+          ctx.moveTo(screenX, screenY);
+          ctx.lineTo(screenX + CONSTANTS.TILE_WIDTH / 2, screenY + CONSTANTS.TILE_HEIGHT / 2);
+          ctx.lineTo(screenX, screenY + CONSTANTS.TILE_HEIGHT); 
+          ctx.lineTo(screenX - CONSTANTS.TILE_WIDTH / 2, screenY + CONSTANTS.TILE_HEIGHT / 2);
+          ctx.closePath(); 
+          
+          ctx.save();
+          ctx.clip();
+          
+          if (grassTexture) {
+            const pattern = ctx.createPattern(grassTexture, 'repeat');
+            if (pattern) {
+              ctx.fillStyle = pattern;
+              ctx.fillRect(
+                screenX - CONSTANTS.TILE_WIDTH,
+                screenY - CONSTANTS.TILE_HEIGHT,
+                CONSTANTS.TILE_WIDTH * 3,
+                CONSTANTS.TILE_HEIGHT * 3
+              );
+            }
+          } else {
+            ctx.fillStyle = '#5a8f3d';
+            ctx.fill();
+          }
+          
+          ctx.restore();
+          ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+          ctx.stroke();
+        } else if (tile.type === 'stone') {
+          ctx.fillStyle = '#7a7a7a';
+          ctx.beginPath(); ctx.moveTo(screenX, screenY);
+          ctx.lineTo(screenX + CONSTANTS.TILE_WIDTH / 2, screenY + CONSTANTS.TILE_HEIGHT / 2);
+          ctx.lineTo(screenX, screenY + CONSTANTS.TILE_HEIGHT); 
+          ctx.lineTo(screenX - CONSTANTS.TILE_WIDTH / 2, screenY + CONSTANTS.TILE_HEIGHT / 2);
+          ctx.closePath(); ctx.fill(); ctx.stroke();
+        } else if (tile.type === 'water') {
+          // Рисуем воду с текстурой
+          ctx.beginPath();
+          ctx.moveTo(screenX, screenY);
+          ctx.lineTo(screenX + CONSTANTS.TILE_WIDTH / 2, screenY + CONSTANTS.TILE_HEIGHT / 2);
+          ctx.lineTo(screenX, screenY + CONSTANTS.TILE_HEIGHT);
+          ctx.lineTo(screenX - CONSTANTS.TILE_WIDTH / 2, screenY + CONSTANTS.TILE_HEIGHT / 2);
+          ctx.closePath();
+
+          ctx.save();
+          ctx.clip();
+
+          if (waterTexture) {
+            const pattern = ctx.createPattern(waterTexture, 'repeat');
+            if (pattern) {
+              ctx.fillStyle = pattern;
+              ctx.fillRect(
+                screenX - CONSTANTS.TILE_WIDTH,
+                screenY - CONSTANTS.TILE_HEIGHT,
+                CONSTANTS.TILE_WIDTH * 3,
+                CONSTANTS.TILE_HEIGHT * 3
+              );
+            }
+          } else {
+            ctx.fillStyle = '#3a5a9a';
+            ctx.fill();
+          }
+
+          ctx.restore();
+          ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+          ctx.stroke();
+        }
       });
 
     // Отрисовка предметов на карте
