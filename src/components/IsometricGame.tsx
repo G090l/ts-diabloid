@@ -36,7 +36,7 @@ const CONSTANTS = {
   ENEMY_COUNT: 70, MOVE_INTERVAL: 200, ENEMY_CHASE_RADIUS: 4,
   ENEMY_MOVE_INTERVAL: 500, RENDER_RADIUS: 17, HEALTH_ORB_RADIUS: 40,
   HEALTH_ORB_MARGIN: 20, ENEMY_DAMAGE: 10, DAMAGE_COOLDOWN: 1000,
-  INVENTORY_SLOT_SIZE: 50,
+  INVENTORY_SLOT_SIZE: 50, STONE_WIDTH: 32, STONE_HEIGHT: 68,
   INVENTORY_PADDING: 10,
   ITEM_DROP_CHANCE: 0.3 
 };
@@ -78,6 +78,8 @@ const IsometricGame: React.FC = () => {
   const [usePotionArea, setUsePotionArea] = useState(false);
   const [grassTexture, setGrassTexture] = useState<HTMLImageElement | null>(null);
   const [waterTexture, setWaterTexture] = useState<HTMLImageElement | null>(null);
+  const [stoneTexture, setStoneTexture] = useState<HTMLImageElement | null>(null);
+  const [rockTexture, setRockTexture] = useState<HTMLImageElement | null>(null);
 
   // Экипированные предметы
   const [equippedItems, setEquippedItems] = useState({
@@ -100,6 +102,14 @@ const IsometricGame: React.FC = () => {
     const waterImg = new Image();
     waterImg.src = '/textures/water.png';
     waterImg.onload = () => setWaterTexture(waterImg);
+
+    const stoneImg = new Image();
+    stoneImg.src = '/textures/stone.png';
+    stoneImg.onload = () => setStoneTexture(stoneImg);
+
+    const rockImg = new Image();
+    rockImg.src = '/textures/rock.png';
+    rockImg.onload = () => setRockTexture(rockImg);
   }, []);
 
   // =============================================
@@ -124,7 +134,7 @@ const IsometricGame: React.FC = () => {
   
   const updateTilesOccupancy = useCallback((tilesList: Tile[], char: Character, enemiesList: Enemy[]) => {
     return tilesList.map(tile => {
-      const occupied = tile.type === 'water' || 
+      const occupied = tile.type === 'water' || tile.type === 'stone' ||
         (tile.x === char.x && tile.y === char.y) ||
         enemiesList.some(e => e.x === tile.x && e.y === tile.y) ||
         itemsOnMap.some(i => i.x === tile.x && i.y === tile.y);
@@ -164,11 +174,12 @@ const IsometricGame: React.FC = () => {
   useEffect(() => {
     // Создание карты
     const newTiles: Tile[] = Array.from({ length: CONSTANTS.MAP_WIDTH * CONSTANTS.MAP_HEIGHT }, (_, i) => {
-      const x = i % CONSTANTS.MAP_WIDTH;
-      const y = Math.floor(i / CONSTANTS.MAP_WIDTH);
-      const type = Math.random() > 0.95 ? 'water' : 'grass';
-      return { x, y, type, occupied: type === 'water' };
-    });
+    const x = i % CONSTANTS.MAP_WIDTH;
+    const y = Math.floor(i / CONSTANTS.MAP_WIDTH);
+    const rand = Math.random();
+    const type = rand > 0.95 ? 'water' : rand > 0.9 ? 'stone' : 'grass';
+    return { x, y, type, occupied: type === 'water' };
+  });
 
     // Создание врагов с проверкой уникальности позиций
     const newEnemies: Enemy[] = [];
@@ -665,10 +676,11 @@ const IsometricGame: React.FC = () => {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-
+  
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.save(); ctx.translate(cameraOffset.x, cameraOffset.y);
-
+    ctx.save(); 
+    ctx.translate(cameraOffset.x, cameraOffset.y);
+  
     // Отрисовка видимых тайлов
     tiles.filter(t => calculateDistance(t.x, t.y, character.x, character.y) <= CONSTANTS.RENDER_RADIUS)
       .forEach(tile => {
@@ -705,13 +717,6 @@ const IsometricGame: React.FC = () => {
           ctx.restore();
           ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
           ctx.stroke();
-        } else if (tile.type === 'stone') {
-          ctx.fillStyle = '#7a7a7a';
-          ctx.beginPath(); ctx.moveTo(screenX, screenY);
-          ctx.lineTo(screenX + CONSTANTS.TILE_WIDTH / 2, screenY + CONSTANTS.TILE_HEIGHT / 2);
-          ctx.lineTo(screenX, screenY + CONSTANTS.TILE_HEIGHT); 
-          ctx.lineTo(screenX - CONSTANTS.TILE_WIDTH / 2, screenY + CONSTANTS.TILE_HEIGHT / 2);
-          ctx.closePath(); ctx.fill(); ctx.stroke();
         } else if (tile.type === 'water') {
           // Рисуем воду с текстурой
           ctx.beginPath();
@@ -720,10 +725,10 @@ const IsometricGame: React.FC = () => {
           ctx.lineTo(screenX, screenY + CONSTANTS.TILE_HEIGHT);
           ctx.lineTo(screenX - CONSTANTS.TILE_WIDTH / 2, screenY + CONSTANTS.TILE_HEIGHT / 2);
           ctx.closePath();
-
+        
           ctx.save();
           ctx.clip();
-
+        
           if (waterTexture) {
             const pattern = ctx.createPattern(waterTexture, 'repeat');
             if (pattern) {
@@ -739,13 +744,44 @@ const IsometricGame: React.FC = () => {
             ctx.fillStyle = '#3a5a9a';
             ctx.fill();
           }
-
+        
           ctx.restore();
           ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
           ctx.stroke();
+        } else if (tile.type === 'stone') {
+          // Рисуем камни с текстурой
+          ctx.beginPath();
+          ctx.moveTo(screenX, screenY);
+          ctx.lineTo(screenX + CONSTANTS.TILE_WIDTH / 2, screenY + CONSTANTS.TILE_HEIGHT / 2);
+          ctx.lineTo(screenX, screenY + CONSTANTS.TILE_HEIGHT);
+          ctx.lineTo(screenX - CONSTANTS.TILE_WIDTH / 2, screenY + CONSTANTS.TILE_HEIGHT / 2);
+          ctx.closePath();
+
+          ctx.save();
+          ctx.clip();
+
+          if (stoneTexture) {
+            const pattern = ctx.createPattern(stoneTexture, 'repeat');
+            if (pattern) {
+              ctx.fillStyle = pattern;
+              ctx.fillRect(
+                screenX - CONSTANTS.TILE_WIDTH,
+                screenY - CONSTANTS.TILE_HEIGHT,
+                CONSTANTS.TILE_WIDTH * 3,
+                CONSTANTS.TILE_HEIGHT * 3
+              );
+            }
+          } else {
+            ctx.fillStyle = '#808080';
+            ctx.fill();
+          }
+        
+          ctx.restore();
+          ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
+          ctx.stroke();
         }
       });
-
+    
     // Отрисовка предметов на карте
     itemsOnMap.filter(i => calculateDistance(i.x, i.y, character.x, character.y) <= CONSTANTS.RENDER_RADIUS)
       .forEach(item => {
@@ -756,13 +792,13 @@ const IsometricGame: React.FC = () => {
         ctx.fillStyle = '#ffffff';
         ctx.fillText(item.item.icon, screenX, screenY + CONSTANTS.TILE_HEIGHT / 2);
       });
-
+    
     // Отрисовка видимых врагов
     enemies.filter(e => calculateDistance(e.x, e.y, character.x, character.y) <= CONSTANTS.RENDER_RADIUS)
       .forEach(enemy => {
         const { x: screenX, y: screenY } = tileToScreen(enemy.x, enemy.y);
         const adjustedScreenY = screenY - CONSTANTS.ENEMY_HEIGHT / 2;
-
+      
         // Подсветка при наведении
         if (hoveredEnemy?.x === enemy.x && hoveredEnemy?.y === enemy.y) {
           ctx.strokeStyle = '#ff0000'; ctx.lineWidth = 3;
@@ -772,7 +808,7 @@ const IsometricGame: React.FC = () => {
           ctx.lineTo(screenX + CONSTANTS.ENEMY_WIDTH / 2, adjustedScreenY + CONSTANTS.ENEMY_HEIGHT);
           ctx.closePath(); ctx.stroke();
         }
-
+      
         // Тело врага
         ctx.fillStyle = enemy.chasing ? '#ff0000' : '#8a2be2';
         ctx.beginPath(); ctx.moveTo(screenX, adjustedScreenY + CONSTANTS.ENEMY_HEIGHT);
@@ -780,14 +816,45 @@ const IsometricGame: React.FC = () => {
         ctx.lineTo(screenX, adjustedScreenY); 
         ctx.lineTo(screenX + CONSTANTS.ENEMY_WIDTH / 2, adjustedScreenY + CONSTANTS.ENEMY_HEIGHT);
         ctx.closePath(); ctx.fill();
-
+      
         // Полоска здоровья
         ctx.fillStyle = '#ff0000';
         ctx.fillRect(screenX - CONSTANTS.ENEMY_WIDTH / 2, adjustedScreenY - 8, CONSTANTS.ENEMY_WIDTH, 5);
         ctx.fillStyle = '#00ff00';
         ctx.fillRect(screenX - CONSTANTS.ENEMY_WIDTH / 2, adjustedScreenY - 8, CONSTANTS.ENEMY_WIDTH * (enemy.health / 100), 5);
       });
-
+    
+    // Отрисовка персонажа
+    if (!gameOver) {
+      const { x: charScreenX, y: charScreenY } = tileToScreen(character.x, character.y);
+      ctx.fillStyle = '#d43b3b'; ctx.beginPath();
+      ctx.moveTo(charScreenX, charScreenY - CONSTANTS.CHARACTER_HEIGHT / 2 + CONSTANTS.CHARACTER_HEIGHT);
+      ctx.lineTo(charScreenX - CONSTANTS.CHARACTER_WIDTH / 2, charScreenY - CONSTANTS.CHARACTER_HEIGHT / 2 + CONSTANTS.CHARACTER_HEIGHT);
+      ctx.lineTo(charScreenX, charScreenY - CONSTANTS.CHARACTER_HEIGHT / 2); 
+      ctx.lineTo(charScreenX + CONSTANTS.CHARACTER_WIDTH / 2, charScreenY - CONSTANTS.CHARACTER_HEIGHT / 2 + CONSTANTS.CHARACTER_HEIGHT);
+      ctx.closePath(); ctx.fill();
+    }
+  
+    // Отрисовка серых прямоугольников на камнях (после всего остального)
+    tiles.filter(t => t.type === 'stone' && calculateDistance(t.x, t.y, character.x, character.y) <= CONSTANTS.RENDER_RADIUS)
+      .forEach(tile => {
+        const { x: screenX, y: screenY } = tileToScreen(tile.x, tile.y);
+        // Рисуем текстуру камня с прозрачностью
+         if (rockTexture) {
+          const rectHeight = CONSTANTS.STONE_HEIGHT;
+          const rectWidth = CONSTANTS.STONE_WIDTH;
+          const rectY = screenY + CONSTANTS.TILE_HEIGHT / 1.35 - rectHeight;
+          const rectX = screenX - rectWidth / 2;
+          ctx.globalAlpha = 0.75;
+          ctx.drawImage(
+            rockTexture,
+            0, 0, rockTexture.width, rockTexture.height,
+            rectX, rectY, rectWidth, rectHeight
+          );
+          ctx.globalAlpha = 1.0;
+        }
+      });
+    
     // Отрисовка цели и пути
     if (character.targetX !== null && character.targetY !== null) {
       const targetTile = tiles.find(t => t.x === character.targetX && t.y === character.targetY);
@@ -801,7 +868,7 @@ const IsometricGame: React.FC = () => {
         ctx.closePath(); ctx.stroke();
       }
     }
-
+  
     // Отрисовка пути
     character.path.forEach(step => {
       if (calculateDistance(step.x, step.y, character.x, character.y) <= CONSTANTS.RENDER_RADIUS) {
@@ -811,21 +878,10 @@ const IsometricGame: React.FC = () => {
         ctx.fill();
       }
     });
-
-    // Отрисовка персонажа
-    if (!gameOver) {
-      const { x: charScreenX, y: charScreenY } = tileToScreen(character.x, character.y);
-      ctx.fillStyle = '#d43b3b'; ctx.beginPath();
-      ctx.moveTo(charScreenX, charScreenY - CONSTANTS.CHARACTER_HEIGHT / 2 + CONSTANTS.CHARACTER_HEIGHT);
-      ctx.lineTo(charScreenX - CONSTANTS.CHARACTER_WIDTH / 2, charScreenY - CONSTANTS.CHARACTER_HEIGHT / 2 + CONSTANTS.CHARACTER_HEIGHT);
-      ctx.lineTo(charScreenX, charScreenY - CONSTANTS.CHARACTER_HEIGHT / 2); 
-      ctx.lineTo(charScreenX + CONSTANTS.CHARACTER_WIDTH / 2, charScreenY - CONSTANTS.CHARACTER_HEIGHT / 2 + CONSTANTS.CHARACTER_HEIGHT);
-      ctx.closePath(); ctx.fill();
-    }
-
+  
     ctx.restore();
     drawHealthOrb(ctx);
-
+  
     // Отрисовка экрана Game Over
     if (gameOver) {
       ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -836,7 +892,6 @@ const IsometricGame: React.FC = () => {
       ctx.fillText('Персонаж погиб', canvas.width / 2, canvas.height / 2 + 60);
     }
   }, [tiles, character, cameraOffset, enemies, hoveredEnemy, tileToScreen, drawHealthOrb, gameOver, itemsOnMap]);
-
   // =============================================
   // РЕНДЕР ИНТЕРФЕЙСА
   // =============================================
