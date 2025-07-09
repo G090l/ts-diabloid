@@ -37,7 +37,7 @@ const CONSTANTS = {
   ENEMY_MOVE_INTERVAL: 500, RENDER_RADIUS: 17, HEALTH_ORB_RADIUS: 40,
   HEALTH_ORB_MARGIN: 20, ENEMY_DAMAGE: 10, DAMAGE_COOLDOWN: 1000,
   INVENTORY_SLOT_SIZE: 50, STONE_WIDTH: 32, STONE_HEIGHT: 68,
-  INVENTORY_PADDING: 10,
+  INVENTORY_PADDING: 10, DIRECTION_STICK_LENGTH: 20,
   ITEM_DROP_CHANCE: 0.3 
 };
 
@@ -80,6 +80,24 @@ const IsometricGame: React.FC = () => {
   const [waterTexture, setWaterTexture] = useState<HTMLImageElement | null>(null);
   const [stoneTexture, setStoneTexture] = useState<HTMLImageElement | null>(null);
   const [rockTexture, setRockTexture] = useState<HTMLImageElement | null>(null);
+  const [characterTextures, setCharacterTextures] = useState<{
+  up: HTMLImageElement | null,
+  down: HTMLImageElement | null,
+  left: HTMLImageElement | null,
+  right: HTMLImageElement | null,
+}>({ up: null, down: null, left: null, right: null });
+  const [enemyTextures, setEnemyTextures] = useState<{
+  up: HTMLImageElement | null,
+  down: HTMLImageElement | null,
+  left: HTMLImageElement | null,
+  right: HTMLImageElement | null,
+}>({ up: null, down: null, left: null, right: null });
+  const [enemyRedTextures, setEnemyRedTextures] = useState<{
+  up: HTMLImageElement | null,
+  down: HTMLImageElement | null,
+  left: HTMLImageElement | null,
+  right: HTMLImageElement | null,
+}>({ up: null, down: null, left: null, right: null });
 
   // Экипированные предметы
   const [equippedItems, setEquippedItems] = useState({
@@ -110,6 +128,34 @@ const IsometricGame: React.FC = () => {
     const rockImg = new Image();
     rockImg.src = '/textures/rock.png';
     rockImg.onload = () => setRockTexture(rockImg);
+
+    const directionImg = (src: string) => {
+      const img = new Image();
+      img.src = src;
+      return img;
+    };
+
+    setCharacterTextures({
+      up: directionImg('/textures/char_up.png'),
+      down: directionImg('/textures/char_down.png'),
+      left: directionImg('/textures/char_left.png'),
+      right: directionImg('/textures/char_right.png'),
+    });
+
+    setEnemyTextures({
+      up: directionImg('/textures/enemy_up.png'),
+      down: directionImg('/textures/enemy_down.png'),
+      left: directionImg('/textures/enemy_left.png'),
+      right: directionImg('/textures/enemy_right.png'),
+    });
+
+    setEnemyRedTextures({
+      up: directionImg('/textures/enemy_up_red.png'),
+      down: directionImg('/textures/enemy_down_red.png'),
+      left: directionImg('/textures/enemy_left_red.png'),
+      right: directionImg('/textures/enemy_right_red.png'),
+    });
+    
   }, []);
 
   // =============================================
@@ -343,6 +389,17 @@ const IsometricGame: React.FC = () => {
     }, CONSTANTS.MOVE_INTERVAL);
     return () => clearInterval(moveInterval);
   }, [character.moving, character.path, tiles, enemies, gameOver, itemsOnMap, inventoryItems]);
+
+  const getCharacterDirection = (currentX: number, currentY: number, nextX: number, nextY: number) => {
+    const dx = nextX - currentX;
+    const dy = nextY - currentY;
+
+    if (Math.abs(dx) > Math.abs(dy)) {
+      return dx > 0 ? 'right' : 'left';
+    } else {
+      return dy > 0 ? 'down' : 'up';
+    }
+  };
 
   // Движение врагов
   useEffect(() => {
@@ -798,24 +855,53 @@ const IsometricGame: React.FC = () => {
       .forEach(enemy => {
         const { x: screenX, y: screenY } = tileToScreen(enemy.x, enemy.y);
         const adjustedScreenY = screenY - CONSTANTS.ENEMY_HEIGHT / 2;
-      
-        // Подсветка при наведении
-        if (hoveredEnemy?.x === enemy.x && hoveredEnemy?.y === enemy.y) {
-          ctx.strokeStyle = '#ff0000'; ctx.lineWidth = 3;
-          ctx.beginPath(); ctx.moveTo(screenX, adjustedScreenY + CONSTANTS.ENEMY_HEIGHT);
+        // Определяем направление врага
+        let enemyDirection = 'down';
+        if (enemy.chasing) {
+          const dx = character.x - enemy.x;
+          const dy = character.y - enemy.y;
+
+          if (Math.abs(dx) > Math.abs(dy)) {
+            enemyDirection = dx > 0 ? 'right' : 'left';
+          } else {
+            enemyDirection = dy > 0 ? 'down' : 'up';
+          }
+        }
+
+        // Выбираем текстуру в зависимости от наведения
+        const isHovered = hoveredEnemy?.x === enemy.x && hoveredEnemy?.y === enemy.y;
+        const currentEnemyTexture = isHovered 
+          ? enemyRedTextures[enemyDirection as keyof typeof enemyRedTextures]
+          : enemyTextures[enemyDirection as keyof typeof enemyTextures];
+
+        // Отрисовка врага с текстурой
+        if (currentEnemyTexture) {
+          ctx.drawImage(
+            currentEnemyTexture,
+            screenX - CONSTANTS.ENEMY_WIDTH / 2,
+            adjustedScreenY,
+            CONSTANTS.ENEMY_WIDTH,
+            CONSTANTS.ENEMY_HEIGHT
+          );
+        } else {
+          // Подсветка при наведении
+            if (hoveredEnemy?.x === enemy.x && hoveredEnemy?.y === enemy.y) {
+              ctx.strokeStyle = '#ff0000'; ctx.lineWidth = 3;
+              ctx.beginPath(); ctx.moveTo(screenX, adjustedScreenY + CONSTANTS.ENEMY_HEIGHT);
+              ctx.lineTo(screenX - CONSTANTS.ENEMY_WIDTH / 2, adjustedScreenY + CONSTANTS.ENEMY_HEIGHT);
+              ctx.lineTo(screenX, adjustedScreenY); 
+              ctx.lineTo(screenX + CONSTANTS.ENEMY_WIDTH / 2, adjustedScreenY + CONSTANTS.ENEMY_HEIGHT);
+              ctx.closePath(); ctx.stroke();
+            }
+          ctx.fillStyle = enemy.chasing ? '#ff0000' : '#8a2be2';
+          ctx.beginPath(); 
+          ctx.moveTo(screenX, adjustedScreenY + CONSTANTS.ENEMY_HEIGHT);
           ctx.lineTo(screenX - CONSTANTS.ENEMY_WIDTH / 2, adjustedScreenY + CONSTANTS.ENEMY_HEIGHT);
           ctx.lineTo(screenX, adjustedScreenY); 
           ctx.lineTo(screenX + CONSTANTS.ENEMY_WIDTH / 2, adjustedScreenY + CONSTANTS.ENEMY_HEIGHT);
-          ctx.closePath(); ctx.stroke();
+          ctx.closePath(); 
+          ctx.fill();
         }
-      
-        // Тело врага
-        ctx.fillStyle = enemy.chasing ? '#ff0000' : '#8a2be2';
-        ctx.beginPath(); ctx.moveTo(screenX, adjustedScreenY + CONSTANTS.ENEMY_HEIGHT);
-        ctx.lineTo(screenX - CONSTANTS.ENEMY_WIDTH / 2, adjustedScreenY + CONSTANTS.ENEMY_HEIGHT);
-        ctx.lineTo(screenX, adjustedScreenY); 
-        ctx.lineTo(screenX + CONSTANTS.ENEMY_WIDTH / 2, adjustedScreenY + CONSTANTS.ENEMY_HEIGHT);
-        ctx.closePath(); ctx.fill();
       
         // Полоска здоровья
         ctx.fillStyle = '#ff0000';
@@ -824,15 +910,35 @@ const IsometricGame: React.FC = () => {
         ctx.fillRect(screenX - CONSTANTS.ENEMY_WIDTH / 2, adjustedScreenY - 8, CONSTANTS.ENEMY_WIDTH * (enemy.health / 100), 5);
       });
     
-    // Отрисовка персонажа
+    // Отрисовка персонажа с текстурой 
     if (!gameOver) {
       const { x: charScreenX, y: charScreenY } = tileToScreen(character.x, character.y);
-      ctx.fillStyle = '#d43b3b'; ctx.beginPath();
-      ctx.moveTo(charScreenX, charScreenY - CONSTANTS.CHARACTER_HEIGHT / 2 + CONSTANTS.CHARACTER_HEIGHT);
-      ctx.lineTo(charScreenX - CONSTANTS.CHARACTER_WIDTH / 2, charScreenY - CONSTANTS.CHARACTER_HEIGHT / 2 + CONSTANTS.CHARACTER_HEIGHT);
-      ctx.lineTo(charScreenX, charScreenY - CONSTANTS.CHARACTER_HEIGHT / 2); 
-      ctx.lineTo(charScreenX + CONSTANTS.CHARACTER_WIDTH / 2, charScreenY - CONSTANTS.CHARACTER_HEIGHT / 2 + CONSTANTS.CHARACTER_HEIGHT);
-      ctx.closePath(); ctx.fill();
+      // Определяем направление
+      let direction = 'down'; 
+      if (character.moving && character.path.length > 0) {
+        const nextStep = character.path[0];
+        direction = getCharacterDirection(character.x, character.y, nextStep.x, nextStep.y);
+      }
+      const currentTexture = characterTextures[direction as keyof typeof characterTextures];
+
+      if (currentTexture) {
+        ctx.drawImage(
+          currentTexture,
+          charScreenX - CONSTANTS.CHARACTER_WIDTH / 2,
+          charScreenY - CONSTANTS.CHARACTER_HEIGHT / 2,
+          CONSTANTS.CHARACTER_WIDTH,
+          CONSTANTS.CHARACTER_HEIGHT
+        );
+      } else {
+        ctx.fillStyle = '#d43b3b';
+        ctx.beginPath();
+        ctx.moveTo(charScreenX, charScreenY - CONSTANTS.CHARACTER_HEIGHT / 2 + CONSTANTS.CHARACTER_HEIGHT);
+        ctx.lineTo(charScreenX - CONSTANTS.CHARACTER_WIDTH / 2, charScreenY - CONSTANTS.CHARACTER_HEIGHT / 2 + CONSTANTS.CHARACTER_HEIGHT);
+        ctx.lineTo(charScreenX, charScreenY - CONSTANTS.CHARACTER_HEIGHT / 2);
+        ctx.lineTo(charScreenX + CONSTANTS.CHARACTER_WIDTH / 2, charScreenY - CONSTANTS.CHARACTER_HEIGHT / 2 + CONSTANTS.CHARACTER_HEIGHT);
+        ctx.closePath();
+        ctx.fill();
+      }
     }
   
     // Отрисовка серых прямоугольников на камнях (после всего остального)
