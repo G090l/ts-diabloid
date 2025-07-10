@@ -55,3 +55,12 @@ export interface EquippedItems {
     boots: Item | null;
     potion: Item | null;
 }
+
+export interface CharacterTextures {
+    up: HTMLImageElement | null;
+    down: HTMLImageElement | null;
+    left: HTMLImageElement | null;
+    right: HTMLImageElement | null;
+}
+
+export interface EnemyTextures extends CharacterTextures { }
