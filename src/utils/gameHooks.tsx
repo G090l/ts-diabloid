@@ -2,6 +2,7 @@ import { CONSTANTS } from './constants';
 import { Tile, Enemy, Character, Item, CharacterTextures, EnemyTextures } from './types';
 import { tileToScreen, calculateDistance } from './gameUtils';
 import { useEffect, useState, useCallback } from 'react';
+
 // =============================================
 // КАСТОМНЫЕ ХУКИ
 // =============================================

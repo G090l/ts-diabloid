@@ -1,15 +1,8 @@
 import { CONSTANTS, ITEMS } from '../utils/constants';
 import { Tile, Enemy, Character, Item, ItemOnMap, EquippedItems } from '../utils/types';
-import {
-    tileToScreen,
-    screenToTile,
-    calculateDistance,
-    isAdjacentToEnemy,
-    updateTilesOccupancy,
-    findPath,
-    getCharacterDirection
-} from '../utils/gameUtils';
-import { useEffect, useState, useCallback } from 'react';
+import { calculateDistance, isAdjacentToEnemy } from '../utils/gameUtils';
+import { useEffect, useCallback } from 'react';
+
 // =============================================
 // СИСТЕМЫ ИГРЫ
 // =============================================

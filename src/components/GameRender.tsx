@@ -2,8 +2,6 @@ import { CONSTANTS } from '../utils/constants';
 import { Tile, Enemy, Character, CharacterTextures, EnemyTextures, ItemOnMap } from '../utils/types';
 import { tileToScreen, calculateDistance, getCharacterDirection } from '../utils/gameUtils';
 
-
-
 // =============================================
 // КОМПОНЕНТЫ ОТРИСОВКИ
 // =============================================
