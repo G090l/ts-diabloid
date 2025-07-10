@@ -5,10 +5,10 @@ import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 // =============================================
 interface Tile { x: number; y: number; type: 'grass' | 'stone' | 'water'; occupied: boolean; }
 interface Enemy { x: number; y: number; health: number; chasing: boolean; }
-interface Character { 
-  x: number; y: number; moving: boolean; 
-  targetX: number | null; targetY: number | null; 
-  path: {x: number, y: number}[]; health: number; maxHealth: number; 
+interface Character {
+  x: number; y: number; moving: boolean;
+  targetX: number | null; targetY: number | null;
+  path: { x: number, y: number }[]; health: number; maxHealth: number;
 }
 
 interface ItemEffect {
@@ -30,7 +30,7 @@ interface Item {
 // =============================================
 const CONSTANTS = {
   TILE_WIDTH: 64, TILE_HEIGHT: 32, CHARACTER_WIDTH: 32, CHARACTER_HEIGHT: 48,
-  ENEMY_WIDTH: 32, ENEMY_HEIGHT: 48, PATH_DOT_RADIUS: 2, 
+  ENEMY_WIDTH: 32, ENEMY_HEIGHT: 48, PATH_DOT_RADIUS: 2,
   TARGET_HIGHLIGHT_COLOR: '#ffff00', TARGET_HIGHLIGHT_WIDTH: 3,
   CANVAS_WIDTH: 800, CANVAS_HEIGHT: 600, MAP_WIDTH: 50, MAP_HEIGHT: 50,
   ENEMY_COUNT: 70, MOVE_INTERVAL: 200, ENEMY_CHASE_RADIUS: 4,
@@ -38,7 +38,7 @@ const CONSTANTS = {
   HEALTH_ORB_MARGIN: 20, ENEMY_DAMAGE: 10, DAMAGE_COOLDOWN: 1000,
   INVENTORY_SLOT_SIZE: 50, STONE_WIDTH: 32, STONE_HEIGHT: 68,
   INVENTORY_PADDING: 10,
-  ITEM_DROP_CHANCE: 0.3 
+  ITEM_DROP_CHANCE: 0.3
 };
 
 // Предопределенные предметы с эффектами
@@ -62,42 +62,42 @@ const IsometricGame: React.FC = () => {
   // СОСТОЯНИЯ И REFS
   // =============================================
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [hoveredEnemy, setHoveredEnemy] = useState<{x: number, y: number} | null>(null);
+  const [hoveredEnemy, setHoveredEnemy] = useState<{ x: number, y: number } | null>(null);
   const [tiles, setTiles] = useState<Tile[]>([]);
   const [enemies, setEnemies] = useState<Enemy[]>([]);
   const [character, setCharacter] = useState<Character>({
-    x: 5, y: 5, moving: false, targetX: null, targetY: null, 
+    x: 5, y: 5, moving: false, targetX: null, targetY: null,
     path: [], health: 100, maxHealth: 100
   });
   const [cameraOffset, setCameraOffset] = useState({ x: 0, y: 0 });
   const [gameOver, setGameOver] = useState(false);
   const [lastDamageTime, setLastDamageTime] = useState(0);
   const [inventoryOpen, setInventoryOpen] = useState(false);
-  const [itemsOnMap, setItemsOnMap] = useState<{item: Item, x: number, y: number}[]>([]);
-  const [draggedItem, setDraggedItem] = useState<{item: Item, index: number, fromEquipped: boolean} | null>(null);
+  const [itemsOnMap, setItemsOnMap] = useState<{ item: Item, x: number, y: number }[]>([]);
+  const [draggedItem, setDraggedItem] = useState<{ item: Item, index: number, fromEquipped: boolean } | null>(null);
   const [usePotionArea, setUsePotionArea] = useState(false);
   const [grassTexture, setGrassTexture] = useState<HTMLImageElement | null>(null);
   const [waterTexture, setWaterTexture] = useState<HTMLImageElement | null>(null);
   const [stoneTexture, setStoneTexture] = useState<HTMLImageElement | null>(null);
   const [rockTexture, setRockTexture] = useState<HTMLImageElement | null>(null);
   const [characterTextures, setCharacterTextures] = useState<{
-  up: HTMLImageElement | null,
-  down: HTMLImageElement | null,
-  left: HTMLImageElement | null,
-  right: HTMLImageElement | null,
-}>({ up: null, down: null, left: null, right: null });
+    up: HTMLImageElement | null,
+    down: HTMLImageElement | null,
+    left: HTMLImageElement | null,
+    right: HTMLImageElement | null,
+  }>({ up: null, down: null, left: null, right: null });
   const [enemyTextures, setEnemyTextures] = useState<{
-  up: HTMLImageElement | null,
-  down: HTMLImageElement | null,
-  left: HTMLImageElement | null,
-  right: HTMLImageElement | null,
-}>({ up: null, down: null, left: null, right: null });
+    up: HTMLImageElement | null,
+    down: HTMLImageElement | null,
+    left: HTMLImageElement | null,
+    right: HTMLImageElement | null,
+  }>({ up: null, down: null, left: null, right: null });
   const [enemyRedTextures, setEnemyRedTextures] = useState<{
-  up: HTMLImageElement | null,
-  down: HTMLImageElement | null,
-  left: HTMLImageElement | null,
-  right: HTMLImageElement | null,
-}>({ up: null, down: null, left: null, right: null });
+    up: HTMLImageElement | null,
+    down: HTMLImageElement | null,
+    left: HTMLImageElement | null,
+    right: HTMLImageElement | null,
+  }>({ up: null, down: null, left: null, right: null });
 
   // Экипированные предметы
   const [equippedItems, setEquippedItems] = useState({
@@ -107,11 +107,11 @@ const IsometricGame: React.FC = () => {
     boots: null as Item | null,
     potion: null as Item | null
   });
-  
+
   // Инвентарь (20 пустых слотов)
   const [inventoryItems, setInventoryItems] = useState<(Item | null)[]>(Array(20).fill(null));
 
- // Загрузка текстур
+  // Загрузка текстур
   useEffect(() => {
     const grassImg = new Image();
     grassImg.src = '/textures/grass.png';
@@ -155,7 +155,7 @@ const IsometricGame: React.FC = () => {
       left: directionImg('/textures/enemy_left_red.png'),
       right: directionImg('/textures/enemy_right_red.png'),
     });
-    
+
   }, []);
 
   // =============================================
@@ -171,13 +171,13 @@ const IsometricGame: React.FC = () => {
     y: Math.floor((screenY / (CONSTANTS.TILE_HEIGHT / 2) - screenX / (CONSTANTS.TILE_WIDTH / 2)) / 2)
   }), []);
 
-  const calculateDistance = (x1: number, y1: number, x2: number, y2: number) => 
+  const calculateDistance = (x1: number, y1: number, x2: number, y2: number) =>
     Math.max(Math.abs(x1 - x2), Math.abs(y1 - y2));
 
   // =============================================
   // ФУНКЦИИ ПРОВЕРКИ И ОБНОВЛЕНИЯ СОСТОЯНИЯ
   // =============================================
-  
+
   const updateTilesOccupancy = useCallback((tilesList: Tile[], char: Character, enemiesList: Enemy[]) => {
     return tilesList.map(tile => {
       const occupied = tile.type === 'water' || tile.type === 'stone' ||
@@ -193,7 +193,7 @@ const IsometricGame: React.FC = () => {
   // =============================================
   const calculateBonuses = useCallback(() => {
     let total = { healthBonus: 0, damageBonus: 0, defenseBonus: 0 };
-    
+
     Object.values(equippedItems).forEach(item => {
       if (item) {
         total.healthBonus += item.effect.healthBonus || 0;
@@ -201,7 +201,7 @@ const IsometricGame: React.FC = () => {
         total.defenseBonus += item.effect.defenseBonus || 0;
       }
     });
-    
+
     return total;
   }, [equippedItems]);
 
@@ -220,30 +220,30 @@ const IsometricGame: React.FC = () => {
   useEffect(() => {
     // Создание карты
     const newTiles: Tile[] = Array.from({ length: CONSTANTS.MAP_WIDTH * CONSTANTS.MAP_HEIGHT }, (_, i) => {
-    const x = i % CONSTANTS.MAP_WIDTH;
-    const y = Math.floor(i / CONSTANTS.MAP_WIDTH);
-    const rand = Math.random();
-    const type = rand > 0.95 ? 'water' : rand > 0.9 ? 'stone' : 'grass';
-    return { x, y, type, occupied: type === 'water' };
-  });
+      const x = i % CONSTANTS.MAP_WIDTH;
+      const y = Math.floor(i / CONSTANTS.MAP_WIDTH);
+      const rand = Math.random();
+      const type = rand > 0.95 ? 'water' : rand > 0.9 ? 'stone' : 'grass';
+      return { x, y, type, occupied: type === 'water' };
+    });
 
     // Создание врагов с проверкой уникальности позиций
     const newEnemies: Enemy[] = [];
     const occupiedPositions = new Set<string>();
-    
+
     while (newEnemies.length < CONSTANTS.ENEMY_COUNT) {
       let x: number, y: number;
       let attempts = 0;
       const maxAttempts = 100; // Защита от бесконечного цикла
-      
+
       do {
         x = Math.floor(Math.random() * CONSTANTS.MAP_WIDTH);
         y = Math.floor(Math.random() * CONSTANTS.MAP_HEIGHT);
         attempts++;
-        
+
         if (attempts >= maxAttempts) break;
       } while (
-        newTiles.some(t => t.x === x && t.y === y && t.occupied) || 
+        newTiles.some(t => t.x === x && t.y === y && t.occupied) ||
         calculateDistance(x, y, 5, 5) < 3 ||
         occupiedPositions.has(`${x},${y}`)
       );
@@ -280,32 +280,32 @@ const IsometricGame: React.FC = () => {
   // =============================================
   // СИСТЕМА БОЯ
   // =============================================
-  const isAdjacentToEnemy = useCallback((charX: number, charY: number, enemyX: number, enemyY: number) => 
-    (Math.abs(charX - enemyX) === 1 && charY === enemyY) || 
+  const isAdjacentToEnemy = useCallback((charX: number, charY: number, enemyX: number, enemyY: number) =>
+    (Math.abs(charX - enemyX) === 1 && charY === enemyY) ||
     (Math.abs(charY - enemyY) === 1 && charX === enemyX), []);
 
   const attackEnemy = useCallback((enemyX: number, enemyY: number) => {
     const bonuses = calculateBonuses();
     const damage = 25 + (bonuses.damageBonus || 0);
-    
+
     setEnemies(prevEnemies => {
-      const newEnemies = prevEnemies.map(e => 
-        e.x === enemyX && e.y === enemyY ? 
+      const newEnemies = prevEnemies.map(e =>
+        e.x === enemyX && e.y === enemyY ?
           (e.health - damage <= 0 ? null : { ...e, health: e.health - damage }) : e
       ).filter(Boolean) as Enemy[];
-      
+
       // Проверяем, был ли убит враг
-      const wasKilled = !newEnemies.some(e => e.x === enemyX && e.y === enemyY) && 
-                       prevEnemies.some(e => e.x === enemyX && e.y === enemyY);
-      
+      const wasKilled = !newEnemies.some(e => e.x === enemyX && e.y === enemyY) &&
+        prevEnemies.some(e => e.x === enemyX && e.y === enemyY);
+
       if (wasKilled) {
         // Получаем текущее состояние тайла
         const tile = tiles.find(t => t.x === enemyX && t.y === enemyY);
         const isWater = tile?.type === 'water';
-        
+
         // Проверяем наличие предмета на этой клетке в текущем состоянии
         const hasItem = itemsOnMap.some(i => i.x === enemyX && i.y === enemyY);
-        
+
         // Если клетка свободна и не вода, и выпал предмет
         if (!hasItem && !isWater && Math.random() < CONSTANTS.ITEM_DROP_CHANCE) {
           // Используем функциональное обновление для гарантии актуального состояния
@@ -320,7 +320,7 @@ const IsometricGame: React.FC = () => {
           });
         }
       }
-      
+
       return newEnemies;
     });
   }, [calculateBonuses, itemsOnMap, tiles]);
@@ -330,7 +330,7 @@ const IsometricGame: React.FC = () => {
   // =============================================
   // Поиск пути
   const findPath = useCallback((startX: number, startY: number, targetX: number, targetY: number) => {
-    const path: {x: number, y: number}[] = [];
+    const path: { x: number, y: number }[] = [];
     let currentX = startX, currentY = startY;
     const isTargetEnemy = enemies.some(e => e.x === targetX && e.y === targetY);
     const isTargetItem = itemsOnMap.some(i => i.x === targetX && i.y === targetY);
@@ -341,7 +341,7 @@ const IsometricGame: React.FC = () => {
         const tile = tiles.find(t => t.x === nextX && t.y === currentY);
         if (tile && !tile.occupied && !enemies.some(e => e.x === nextX && e.y === currentY)) {
           currentX = nextX;
-          path.push({x: currentX, y: currentY});
+          path.push({ x: currentX, y: currentY });
           if ((isTargetEnemy || isTargetItem) && nextX === targetX && currentY === targetY) break;
         } else break;
       }
@@ -351,7 +351,7 @@ const IsometricGame: React.FC = () => {
         const tile = tiles.find(t => t.x === currentX && t.y === nextY);
         if (tile && !tile.occupied && !enemies.some(e => e.x === currentX && e.y === nextY)) {
           currentY = nextY;
-          path.push({x: currentX, y: currentY});
+          path.push({ x: currentX, y: currentY });
           if ((isTargetEnemy || isTargetItem) && currentX === targetX && nextY === targetY) break;
         } else break;
       }
@@ -370,7 +370,7 @@ const IsometricGame: React.FC = () => {
         if (!tile || tile.occupied || enemies.some(e => e.x === nextStep.x && e.y === nextStep.y)) {
           return { ...prev, moving: false, targetX: null, targetY: null, path: [] };
         }
-        
+
         // Проверяем, подобрали ли предмет
         const pickedUpItemIndex = itemsOnMap.findIndex(i => i.x === nextStep.x && i.y === nextStep.y);
         if (pickedUpItemIndex !== -1) {
@@ -383,7 +383,7 @@ const IsometricGame: React.FC = () => {
             setItemsOnMap(prev => prev.filter((_, i) => i !== pickedUpItemIndex));
           }
         }
-        
+
         return { ...prev, x: nextStep.x, y: nextStep.y, path: remainingPath };
       });
     }, CONSTANTS.MOVE_INTERVAL);
@@ -407,7 +407,7 @@ const IsometricGame: React.FC = () => {
       setEnemies(prev => {
         const newEnemies = [...prev];
         const occupiedTiles = new Set<string>();
-        
+
         // Сначала отмечаем текущие позиции врагов как занятые
         newEnemies.forEach(enemy => {
           occupiedTiles.add(`${enemy.x},${enemy.y}`);
@@ -416,7 +416,7 @@ const IsometricGame: React.FC = () => {
         return prev.map(enemy => {
           const distance = calculateDistance(enemy.x, enemy.y, character.x, character.y);
           if (distance > CONSTANTS.ENEMY_CHASE_RADIUS) return { ...enemy, chasing: false };
-          
+
           const directions = [
             { dx: Math.sign(character.x - enemy.x), dy: 0 },
             { dx: 0, dy: Math.sign(character.y - enemy.y) }
@@ -425,7 +425,7 @@ const IsometricGame: React.FC = () => {
           for (const dir of directions) {
             const newX = enemy.x + dir.dx, newY = enemy.y + dir.dy;
             const tileKey = `${newX},${newY}`;
-            
+
             if (!occupiedTiles.has(tileKey)) {
               const tile = tiles.find(t => t.x === newX && t.y === newY);
               if (tile && !tile.occupied) {
@@ -439,7 +439,7 @@ const IsometricGame: React.FC = () => {
         });
       });
     };
-    
+
     const interval = setInterval(moveEnemies, CONSTANTS.ENEMY_MOVE_INTERVAL);
     return () => clearInterval(interval);
   }, [character.x, character.y, tiles]);
@@ -456,7 +456,7 @@ const IsometricGame: React.FC = () => {
       if (adjacentEnemies.length > 0) {
         const bonuses = calculateBonuses();
         const damage = Math.max(1, CONSTANTS.ENEMY_DAMAGE - (bonuses.defenseBonus || 0));
-        
+
         setCharacter(prev => {
           const newHealth = Math.max(0, prev.health - damage);
           if (newHealth <= 0) setGameOver(true);
@@ -481,7 +481,7 @@ const IsometricGame: React.FC = () => {
       e.clientX - rect.left - cameraOffset.x,
       e.clientY - rect.top - cameraOffset.y
     );
-    setHoveredEnemy(enemies.find(e => e.x === tileX && e.y === tileY) ? {x: tileX, y: tileY} : null);
+    setHoveredEnemy(enemies.find(e => e.x === tileX && e.y === tileY) ? { x: tileX, y: tileY } : null);
   }, [cameraOffset, enemies, screenToTile, gameOver, inventoryOpen]);
 
   const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -493,7 +493,7 @@ const IsometricGame: React.FC = () => {
       e.clientX - rect.left - cameraOffset.x,
       e.clientY - rect.top - cameraOffset.y
     );
-    
+
     if (tileX < 0 || tileX >= CONSTANTS.MAP_WIDTH || tileY < 0 || tileY >= CONSTANTS.MAP_HEIGHT) return;
     const clickedEnemy = enemies.find(e => e.x === tileX && e.y === tileY);
     const clickedTile = tiles.find(t => t.x === tileX && t.y === tileY);
@@ -553,9 +553,9 @@ const IsometricGame: React.FC = () => {
   const handleDragStart = (index: number, fromEquipped: boolean = false) => {
     if (fromEquipped) {
       // Перетаскивание из слота экипировки
-      const itemType = index === -1 ? 'weapon' : 
-                      index === -2 ? 'helmet' : 
-                      index === -3 ? 'armor' : 'boots';
+      const itemType = index === -1 ? 'weapon' :
+        index === -2 ? 'helmet' :
+          index === -3 ? 'armor' : 'boots';
       const item = equippedItems[itemType];
       if (item) {
         setDraggedItem({ item, index, fromEquipped: true });
@@ -577,123 +577,123 @@ const IsometricGame: React.FC = () => {
 
     // Если это зелье и его кладут в область использования
     if (draggedItem.item.type === 'potion' && usePotionArea) {
-        applyPotionEffect(draggedItem.item);
-        // Удаляем зелье из инвентаря
-        const newInventory = [...inventoryItems];
-        newInventory[draggedItem.index] = null;
-        setInventoryItems(newInventory);
-        setUsePotionArea(false);
-        setDraggedItem(null);
-        return;
+      applyPotionEffect(draggedItem.item);
+      // Удаляем зелье из инвентаря
+      const newInventory = [...inventoryItems];
+      newInventory[draggedItem.index] = null;
+      setInventoryItems(newInventory);
+      setUsePotionArea(false);
+      setDraggedItem(null);
+      return;
     }
 
     // Если перетаскиваем из экипировки в инвентарь
     if (draggedItem.fromEquipped && !isEquipmentSlot) {
-        const itemType = draggedItem.item.type;
-        const newEquippedItems = { ...equippedItems };
-        const newInventory = [...inventoryItems];
-        
-        // Находим первый пустой слот
-        const emptySlotIndex = newInventory.findIndex(item => item === null);
-        if (emptySlotIndex !== -1) {
-            newInventory[emptySlotIndex] = draggedItem.item;
-            
-            // Определяем, из какого слота экипировки снимаем предмет
-            switch (itemType) {
-                case 'weapon': newEquippedItems.weapon = null; break;
-                case 'helmet': newEquippedItems.helmet = null; break;
-                case 'armor': newEquippedItems.armor = null; break;
-                case 'boots': newEquippedItems.boots = null; break;
-            }
-            
-            setEquippedItems(newEquippedItems);
-            setInventoryItems(newInventory);
+      const itemType = draggedItem.item.type;
+      const newEquippedItems = { ...equippedItems };
+      const newInventory = [...inventoryItems];
+
+      // Находим первый пустой слот
+      const emptySlotIndex = newInventory.findIndex(item => item === null);
+      if (emptySlotIndex !== -1) {
+        newInventory[emptySlotIndex] = draggedItem.item;
+
+        // Определяем, из какого слота экипировки снимаем предмет
+        switch (itemType) {
+          case 'weapon': newEquippedItems.weapon = null; break;
+          case 'helmet': newEquippedItems.helmet = null; break;
+          case 'armor': newEquippedItems.armor = null; break;
+          case 'boots': newEquippedItems.boots = null; break;
         }
+
+        setEquippedItems(newEquippedItems);
+        setInventoryItems(newInventory);
+      }
     }
     // Если перетаскиваем из инвентаря в экипировку
     else if (!draggedItem.fromEquipped && isEquipmentSlot) {
-        // Определяем тип слота экипировки
-        let slotType: keyof typeof equippedItems;
-        switch (targetIndex) {
-            case -1: slotType = 'weapon'; break;
-            case -2: slotType = 'helmet'; break;
-            case -3: slotType = 'armor'; break;
-            case -4: slotType = 'boots'; break;
-            default: slotType = 'potion'; break;
-        }
+      // Определяем тип слота экипировки
+      let slotType: keyof typeof equippedItems;
+      switch (targetIndex) {
+        case -1: slotType = 'weapon'; break;
+        case -2: slotType = 'helmet'; break;
+        case -3: slotType = 'armor'; break;
+        case -4: slotType = 'boots'; break;
+        default: slotType = 'potion'; break;
+      }
 
-        // Проверяем, можно ли экипировать этот предмет в данный слот
-        if (draggedItem.item.type !== slotType) {
-            // Неправильный тип предмета для этого слота - отменяем действие
-            setDraggedItem(null);
-            setUsePotionArea(false);
-            return;
-        }
+      // Проверяем, можно ли экипировать этот предмет в данный слот
+      if (draggedItem.item.type !== slotType) {
+        // Неправильный тип предмета для этого слота - отменяем действие
+        setDraggedItem(null);
+        setUsePotionArea(false);
+        return;
+      }
 
-        // Меняем местами предметы
-        const newEquippedItems = { ...equippedItems };
-        const oldItem = newEquippedItems[slotType];
-        const newInventory = [...inventoryItems];
-        
-        newEquippedItems[slotType] = draggedItem.item;
-        newInventory[draggedItem.index] = oldItem;
-        
-        setEquippedItems(newEquippedItems);
-        setInventoryItems(newInventory);
+      // Меняем местами предметы
+      const newEquippedItems = { ...equippedItems };
+      const oldItem = newEquippedItems[slotType];
+      const newInventory = [...inventoryItems];
+
+      newEquippedItems[slotType] = draggedItem.item;
+      newInventory[draggedItem.index] = oldItem;
+
+      setEquippedItems(newEquippedItems);
+      setInventoryItems(newInventory);
     }
     // Если перетаскиваем внутри инвентаря
     else if (!draggedItem.fromEquipped && !isEquipmentSlot) {
-        const newInventory = [...inventoryItems];
-        if (newInventory[targetIndex] !== null) {
-            // Меняем местами предметы
-            const temp = newInventory[targetIndex];
-            newInventory[targetIndex] = draggedItem.item;
-            newInventory[draggedItem.index] = temp;
-        } else {
-            // Перемещаем предмет в пустой слот
-            newInventory[targetIndex] = draggedItem.item;
-            newInventory[draggedItem.index] = null;
-        }
-        setInventoryItems(newInventory);
+      const newInventory = [...inventoryItems];
+      if (newInventory[targetIndex] !== null) {
+        // Меняем местами предметы
+        const temp = newInventory[targetIndex];
+        newInventory[targetIndex] = draggedItem.item;
+        newInventory[draggedItem.index] = temp;
+      } else {
+        // Перемещаем предмет в пустой слот
+        newInventory[targetIndex] = draggedItem.item;
+        newInventory[draggedItem.index] = null;
+      }
+      setInventoryItems(newInventory);
     }
-    
+
     setUsePotionArea(false);
     setDraggedItem(null);
-};
+  };
 
   // Обработчик двойного клика по предмету в инвентаре
   const handleDoubleClick = (index: number) => {
-  const item = inventoryItems[index];
-  if (!item) return;
+    const item = inventoryItems[index];
+    if (!item) return;
 
-  // Если это зелье - используем его
-  if (item.type === 'potion') {
-    applyPotionEffect(item);
-    // Удаляем зелье из инвентаря
+    // Если это зелье - используем его
+    if (item.type === 'potion') {
+      applyPotionEffect(item);
+      // Удаляем зелье из инвентаря
+      const newInventory = [...inventoryItems];
+      newInventory[index] = null;
+      setInventoryItems(newInventory);
+      return;
+    }
+
+    // Для других предметов - пытаемся экипировать
+    const slotType = item.type as keyof typeof equippedItems;
+    const newEquippedItems = { ...equippedItems };
     const newInventory = [...inventoryItems];
-    newInventory[index] = null;
+
+    // Если слот уже занят - меняем местами
+    if (newEquippedItems[slotType]) {
+      const oldItem = newEquippedItems[slotType];
+      newInventory[index] = oldItem;
+    } else {
+      newInventory[index] = null;
+    }
+
+    newEquippedItems[slotType] = item;
+
+    setEquippedItems(newEquippedItems);
     setInventoryItems(newInventory);
-    return;
-  }
-
-  // Для других предметов - пытаемся экипировать
-  const slotType = item.type as keyof typeof equippedItems;
-  const newEquippedItems = { ...equippedItems };
-  const newInventory = [...inventoryItems];
-
-  // Если слот уже занят - меняем местами
-  if (newEquippedItems[slotType]) {
-    const oldItem = newEquippedItems[slotType];
-    newInventory[index] = oldItem;
-  } else {
-    newInventory[index] = null;
-  }
-
-  newEquippedItems[slotType] = item;
-  
-  setEquippedItems(newEquippedItems);
-  setInventoryItems(newInventory);
-};
+  };
 
   // =============================================
   // СИСТЕМА ОТРИСОВКИ
@@ -701,10 +701,10 @@ const IsometricGame: React.FC = () => {
   // Отрисовка здоровья
   const drawHealthOrb = useCallback((ctx: CanvasRenderingContext2D) => {
     const healthPercentage = Math.min(1, character.health / character.maxHealth);
-    
+
     const orbX = CONSTANTS.HEALTH_ORB_MARGIN + CONSTANTS.HEALTH_ORB_RADIUS;
     const orbY = CONSTANTS.CANVAS_HEIGHT - CONSTANTS.HEALTH_ORB_MARGIN - CONSTANTS.HEALTH_ORB_RADIUS;
-    
+
     // Фон орбы здоровья
     const gradient = ctx.createRadialGradient(orbX, orbY, CONSTANTS.HEALTH_ORB_RADIUS * 0.3, orbX, orbY, CONSTANTS.HEALTH_ORB_RADIUS);
     gradient.addColorStop(0, '#4a0000'); gradient.addColorStop(1, '#1a0000');
@@ -733,28 +733,28 @@ const IsometricGame: React.FC = () => {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-  
+
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.save(); 
+    ctx.save();
     ctx.translate(cameraOffset.x, cameraOffset.y);
-  
+
     // Отрисовка видимых тайлов
     tiles.filter(t => calculateDistance(t.x, t.y, character.x, character.y) <= CONSTANTS.RENDER_RADIUS)
       .forEach(tile => {
         const { x: screenX, y: screenY } = tileToScreen(tile.x, tile.y);
-        
+
         if (tile.type === 'grass') {
           // Рисуем траву с текстурой
-          ctx.beginPath(); 
+          ctx.beginPath();
           ctx.moveTo(screenX, screenY);
           ctx.lineTo(screenX + CONSTANTS.TILE_WIDTH / 2, screenY + CONSTANTS.TILE_HEIGHT / 2);
-          ctx.lineTo(screenX, screenY + CONSTANTS.TILE_HEIGHT); 
+          ctx.lineTo(screenX, screenY + CONSTANTS.TILE_HEIGHT);
           ctx.lineTo(screenX - CONSTANTS.TILE_WIDTH / 2, screenY + CONSTANTS.TILE_HEIGHT / 2);
-          ctx.closePath(); 
-          
+          ctx.closePath();
+
           ctx.save();
           ctx.clip();
-          
+
           if (grassTexture) {
             const pattern = ctx.createPattern(grassTexture, 'repeat');
             if (pattern) {
@@ -770,7 +770,7 @@ const IsometricGame: React.FC = () => {
             ctx.fillStyle = '#5a8f3d';
             ctx.fill();
           }
-          
+
           ctx.restore();
           ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
           ctx.stroke();
@@ -782,10 +782,10 @@ const IsometricGame: React.FC = () => {
           ctx.lineTo(screenX, screenY + CONSTANTS.TILE_HEIGHT);
           ctx.lineTo(screenX - CONSTANTS.TILE_WIDTH / 2, screenY + CONSTANTS.TILE_HEIGHT / 2);
           ctx.closePath();
-        
+
           ctx.save();
           ctx.clip();
-        
+
           if (waterTexture) {
             const pattern = ctx.createPattern(waterTexture, 'repeat');
             if (pattern) {
@@ -801,7 +801,7 @@ const IsometricGame: React.FC = () => {
             ctx.fillStyle = '#3a5a9a';
             ctx.fill();
           }
-        
+
           ctx.restore();
           ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
           ctx.stroke();
@@ -832,13 +832,13 @@ const IsometricGame: React.FC = () => {
             ctx.fillStyle = '#808080';
             ctx.fill();
           }
-        
+
           ctx.restore();
           ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
           ctx.stroke();
         }
       });
-    
+
     // Отрисовка предметов на карте
     itemsOnMap.filter(i => calculateDistance(i.x, i.y, character.x, character.y) <= CONSTANTS.RENDER_RADIUS)
       .forEach(item => {
@@ -849,7 +849,7 @@ const IsometricGame: React.FC = () => {
         ctx.fillStyle = '#ffffff';
         ctx.fillText(item.item.icon, screenX, screenY + CONSTANTS.TILE_HEIGHT / 2);
       });
-    
+
     // Отрисовка видимых врагов
     enemies.filter(e => calculateDistance(e.x, e.y, character.x, character.y) <= CONSTANTS.RENDER_RADIUS)
       .forEach(enemy => {
@@ -870,7 +870,7 @@ const IsometricGame: React.FC = () => {
 
         // Выбираем текстуру в зависимости от наведения
         const isHovered = hoveredEnemy?.x === enemy.x && hoveredEnemy?.y === enemy.y;
-        const currentEnemyTexture = isHovered 
+        const currentEnemyTexture = isHovered
           ? enemyRedTextures[enemyDirection as keyof typeof enemyRedTextures]
           : enemyTextures[enemyDirection as keyof typeof enemyTextures];
 
@@ -885,36 +885,36 @@ const IsometricGame: React.FC = () => {
           );
         } else {
           // Подсветка при наведении
-            if (hoveredEnemy?.x === enemy.x && hoveredEnemy?.y === enemy.y) {
-              ctx.strokeStyle = '#ff0000'; ctx.lineWidth = 3;
-              ctx.beginPath(); ctx.moveTo(screenX, adjustedScreenY + CONSTANTS.ENEMY_HEIGHT);
-              ctx.lineTo(screenX - CONSTANTS.ENEMY_WIDTH / 2, adjustedScreenY + CONSTANTS.ENEMY_HEIGHT);
-              ctx.lineTo(screenX, adjustedScreenY); 
-              ctx.lineTo(screenX + CONSTANTS.ENEMY_WIDTH / 2, adjustedScreenY + CONSTANTS.ENEMY_HEIGHT);
-              ctx.closePath(); ctx.stroke();
-            }
+          if (hoveredEnemy?.x === enemy.x && hoveredEnemy?.y === enemy.y) {
+            ctx.strokeStyle = '#ff0000'; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.moveTo(screenX, adjustedScreenY + CONSTANTS.ENEMY_HEIGHT);
+            ctx.lineTo(screenX - CONSTANTS.ENEMY_WIDTH / 2, adjustedScreenY + CONSTANTS.ENEMY_HEIGHT);
+            ctx.lineTo(screenX, adjustedScreenY);
+            ctx.lineTo(screenX + CONSTANTS.ENEMY_WIDTH / 2, adjustedScreenY + CONSTANTS.ENEMY_HEIGHT);
+            ctx.closePath(); ctx.stroke();
+          }
           ctx.fillStyle = enemy.chasing ? '#ff0000' : '#8a2be2';
-          ctx.beginPath(); 
+          ctx.beginPath();
           ctx.moveTo(screenX, adjustedScreenY + CONSTANTS.ENEMY_HEIGHT);
           ctx.lineTo(screenX - CONSTANTS.ENEMY_WIDTH / 2, adjustedScreenY + CONSTANTS.ENEMY_HEIGHT);
-          ctx.lineTo(screenX, adjustedScreenY); 
+          ctx.lineTo(screenX, adjustedScreenY);
           ctx.lineTo(screenX + CONSTANTS.ENEMY_WIDTH / 2, adjustedScreenY + CONSTANTS.ENEMY_HEIGHT);
-          ctx.closePath(); 
+          ctx.closePath();
           ctx.fill();
         }
-      
+
         // Полоска здоровья
         ctx.fillStyle = '#ff0000';
         ctx.fillRect(screenX - CONSTANTS.ENEMY_WIDTH / 2, adjustedScreenY - 8, CONSTANTS.ENEMY_WIDTH, 5);
         ctx.fillStyle = '#00ff00';
         ctx.fillRect(screenX - CONSTANTS.ENEMY_WIDTH / 2, adjustedScreenY - 8, CONSTANTS.ENEMY_WIDTH * (enemy.health / 100), 5);
       });
-    
+
     // Отрисовка персонажа с текстурой 
     if (!gameOver) {
       const { x: charScreenX, y: charScreenY } = tileToScreen(character.x, character.y);
       // Определяем направление
-      let direction = 'down'; 
+      let direction = 'down';
       if (character.moving && character.path.length > 0) {
         const nextStep = character.path[0];
         direction = getCharacterDirection(character.x, character.y, nextStep.x, nextStep.y);
@@ -940,13 +940,13 @@ const IsometricGame: React.FC = () => {
         ctx.fill();
       }
     }
-  
+
     // Отрисовка серых прямоугольников на камнях (после всего остального)
     tiles.filter(t => t.type === 'stone' && calculateDistance(t.x, t.y, character.x, character.y) <= CONSTANTS.RENDER_RADIUS)
       .forEach(tile => {
         const { x: screenX, y: screenY } = tileToScreen(tile.x, tile.y);
         // Рисуем текстуру камня с прозрачностью
-         if (rockTexture) {
+        if (rockTexture) {
           const rectHeight = CONSTANTS.STONE_HEIGHT;
           const rectWidth = CONSTANTS.STONE_WIDTH;
           const rectY = screenY + CONSTANTS.TILE_HEIGHT / 1.35 - rectHeight;
@@ -960,7 +960,7 @@ const IsometricGame: React.FC = () => {
           ctx.globalAlpha = 1.0;
         }
       });
-    
+
     // Отрисовка цели и пути
     if (character.targetX !== null && character.targetY !== null) {
       const targetTile = tiles.find(t => t.x === character.targetX && t.y === character.targetY);
@@ -969,12 +969,12 @@ const IsometricGame: React.FC = () => {
         ctx.strokeStyle = CONSTANTS.TARGET_HIGHLIGHT_COLOR; ctx.lineWidth = CONSTANTS.TARGET_HIGHLIGHT_WIDTH;
         ctx.beginPath(); ctx.moveTo(screenX, screenY);
         ctx.lineTo(screenX + CONSTANTS.TILE_WIDTH / 2, screenY + CONSTANTS.TILE_HEIGHT / 2);
-        ctx.lineTo(screenX, screenY + CONSTANTS.TILE_HEIGHT); 
+        ctx.lineTo(screenX, screenY + CONSTANTS.TILE_HEIGHT);
         ctx.lineTo(screenX - CONSTANTS.TILE_WIDTH / 2, screenY + CONSTANTS.TILE_HEIGHT / 2);
         ctx.closePath(); ctx.stroke();
       }
     }
-  
+
     // Отрисовка пути
     character.path.forEach(step => {
       if (calculateDistance(step.x, step.y, character.x, character.y) <= CONSTANTS.RENDER_RADIUS) {
@@ -984,10 +984,10 @@ const IsometricGame: React.FC = () => {
         ctx.fill();
       }
     });
-  
+
     ctx.restore();
     drawHealthOrb(ctx);
-  
+
     // Отрисовка экрана Game Over
     if (gameOver) {
       ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -1004,7 +1004,7 @@ const IsometricGame: React.FC = () => {
   // Рендер характеристик персонажа
   const renderCharacterStats = () => {
     if (!inventoryOpen) return null;
-    
+
     const bonuses = calculateBonuses();
     const statsStyle: React.CSSProperties = {
       position: 'absolute',
@@ -1087,17 +1087,17 @@ const IsometricGame: React.FC = () => {
     return (
       <div style={inventoryStyle}>
         <h2 style={{ marginTop: 0, marginBottom: CONSTANTS.INVENTORY_PADDING }}>Инвентарь</h2>
-        
+
         {/* Слоты экипировки */}
         <div style={equippedSlotsStyle}>
           {/* Шлем */}
-          <div 
+          <div
             style={{ ...slotStyle, gridColumn: '2 / 3' }}
             onDragOver={handleDragOver}
             onDrop={() => handleDrop(-2, true)}
           >
             {equippedItems.helmet ? (
-              <div 
+              <div
                 draggable
                 onDragStart={() => handleDragStart(-2, true)}
               >
@@ -1106,15 +1106,15 @@ const IsometricGame: React.FC = () => {
             ) : ''}
             <div style={slotLabelStyle}>Шлем</div>
           </div>
-          
+
           {/* Броня */}
-          <div 
+          <div
             style={{ ...slotStyle, gridColumn: '2 / 3', gridRow: '2 / 3' }}
             onDragOver={handleDragOver}
             onDrop={() => handleDrop(-3, true)}
           >
             {equippedItems.armor ? (
-              <div 
+              <div
                 draggable
                 onDragStart={() => handleDragStart(-3, true)}
               >
@@ -1123,15 +1123,15 @@ const IsometricGame: React.FC = () => {
             ) : ''}
             <div style={slotLabelStyle}>Броня</div>
           </div>
-          
+
           {/* Ботинки */}
-          <div 
+          <div
             style={{ ...slotStyle, gridColumn: '2 / 3', gridRow: '3 / 3' }}
             onDragOver={handleDragOver}
             onDrop={() => handleDrop(-4, true)}
           >
             {equippedItems.boots ? (
-              <div 
+              <div
                 draggable
                 onDragStart={() => handleDragStart(-4, true)}
               >
@@ -1141,10 +1141,10 @@ const IsometricGame: React.FC = () => {
             <div style={slotLabelStyle}>Ботинки</div>
           </div>
         </div>
-        
+
         {/* Оружие */}
-        <div 
-          style={{ 
+        <div
+          style={{
             position: 'absolute',
             left: CONSTANTS.INVENTORY_PADDING,
             top: `${CONSTANTS.INVENTORY_SLOT_SIZE * 2 + CONSTANTS.INVENTORY_PADDING * 4}px`
@@ -1154,7 +1154,7 @@ const IsometricGame: React.FC = () => {
         >
           <div style={slotStyle}>
             {equippedItems.weapon ? (
-              <div 
+              <div
                 draggable
                 onDragStart={() => handleDragStart(-1, true)}
               >
@@ -1164,9 +1164,9 @@ const IsometricGame: React.FC = () => {
             <div style={slotLabelStyle}>Оружие</div>
           </div>
         </div>
-        
+
         {/* Область для использования зелий */}
-        <div 
+        <div
           style={{
             position: 'absolute',
             right: CONSTANTS.INVENTORY_PADDING,
@@ -1217,11 +1217,11 @@ const IsometricGame: React.FC = () => {
             Исп. зелье
           </div>
         </div>
-        
+
         {/* Основной инвентарь */}
         <div style={inventorySlotsStyle}>
           {inventoryItems.map((item, index) => (
-            <div 
+            <div
               key={index}
               style={slotStyle}
               draggable={!!item}
@@ -1234,9 +1234,9 @@ const IsometricGame: React.FC = () => {
             </div>
           ))}
         </div>
-        
+
         {/* Кнопка закрытия */}
-        <button 
+        <button
           onClick={() => setInventoryOpen(false)}
           style={{
             marginTop: CONSTANTS.INVENTORY_PADDING,
